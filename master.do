@@ -10,8 +10,8 @@ macro drop _all
 set more off
 
 * Filepath globals
-global project_root "P:/Nuffield Pension Saving/Survey Data/BHPS_USoc"
-global dofiles "$project_root/do"
+global project_root "P:/JPI_PENSINEQ/Inequalities/Summer_student/analysis"
+global code "$project_root/pension-inequalities-code"
 global workingdata "$project_root/data"
 global output "$project_root/output"
 
@@ -22,6 +22,6 @@ global graphconfig "graphregion(color(white)) bgcolor(white)"
 
 *do "$dofiles/extract_usoc"  // extracts a dataset with pension variables using the USoc Extractor
 do "$dofiles/clean_usoc" 
-main // clean the extracted dataset 
+*main // clean the extracted dataset 
 do "$dofiles/analysis_usoc"
-main // do analysis 
+*main // do analysis 
