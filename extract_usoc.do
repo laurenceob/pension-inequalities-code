@@ -76,7 +76,7 @@ usextract using "$workingdata/usoc_extracted",
 		ownperc(ownperc)
 		rawvars(sex hidp pno pidp jbterm1 jbsect jbsectpub jbsize 
 				jbsic07_cc jbsoc00_cc j2pay_dv marstat_dv samejob
-				ndepchl_dv jbsamr mstatsam mstatsamn lwwrong empchk racel)
+				ndepchl_dv jbsamr mstatsam mstatsamn lwwrong empchk racel health)
 		mindic
 		
 	)
