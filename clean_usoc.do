@@ -6,6 +6,57 @@
 					at bottom of file for structure
 ********************************************************************************/
 
+capture program drop main
+program define main 
+
+	* First job is to use data from all waves of BHPS and USoc to work out someone's education level 
+	* This variable is coded as missing if someone already answered this question in an earlier wave and their 
+	* ed level hasn't changed. So use all waves to copy previous answers to other waves 
+	* Then after that just keep USoc
+	clean_ff_vars
+	
+	* Just keep USoc observations 
+	keep if wave > 0
+	
+	* Just keep even waves when we have pension data and declare as panel data with only even waves
+	keep if mod(wave, 2) == 0
+	xtset pidp wave, delta(2)
+	
+	* Make partner variables 
+	make_partner_vars
+	
+	* Drop people with proxy interviews 
+	keep if ivfio == 1
+
+	* Drop households if anyone in them has a missing interview year (this is only a few obs)
+	gen missing_intyear = missing(intyear)
+	egen missing_intyear_hh = sum(missing_intyear), by(wave hidp)
+	qui count if missing_intyear_hh == 1
+	assert r(N) < 30
+	drop if missing_intyear_hh == 1
+	drop missing_intyear*
+	
+	* Clean pension variables
+	clean_pension_vars 
+	
+	* Clean some of the circumstance variables
+	clean_circumstance_vars
+	
+	* Clean job-related variables
+	clean_job_vars 
+	
+	* Sample is people who are working-age: 22-59 year olds
+	keep if inrange(age, 22, 59)
+	
+	* Drop superfluous variables (these are from BHPS)
+	drop pid hid buno
+	
+	* Save
+	save "$workingdata/usoc_clean", replace
+
+
+end
+
 capture program drop clean_ff_vars
 program define clean_ff_vars 
 
@@ -30,30 +81,6 @@ program define clean_ff_vars
 	label define edgrpnew 0 "None of the above qualifications" 1 "Less than GCSEs" 2 "GCSEs" 3 "A-levels" ///
 		4 "Vocational higher" 5 "University"
 	label values edgrpnew edgrpnew 
-
-end
-
-capture program drop make_employer_change
-program define make_employer_change
-
-	/* Use the annual event history questions to get at changes in employer/job (over 2 waves) */
-	xtset pidp wave
-	
-	* Employer change (this includes people who were not continously employed over the year)
-	gen employer_change = 1 if jbsamr == 2 | L.jbsamr == 2
-	replace employer_change = 1 if empchk == 2 | L.empchk == 2 // not continuously employed
-	replace employer_change = 0 if jbsamr == 1 & L.jbsamr == 1
-	label var employer_change "Whether changed employer in past two years"
-	label define employer_change 0 "Not changed employer" 1 "Changed employer"
-	label values employer_change employer_change
-	
-	* Job change (including employer change)
-	gen job_change = 1 if employer_change == 1
-	replace job_change = 1 if samejob == 2 | L.samejob == 2
-	replace job_change = 0 if samejob == 1 & L.samejob == 1
-	label var job_change "Whether changed job in past two years"
-	label define job_change 0 "Not changed job" 1 "Changed job"
-	label values job_change job_change
 
 end
 
@@ -94,76 +121,7 @@ program define make_partner_vars
 	label define partner_inwork 0 "Partner not in paid work" 1 "Partner in paid work" .a "Missing"
 	label values partner_inwork partner_inwork
 	
-
-end
-
-capture program drop make_weights
-program define make_weights 
-
-	/* Make weights for both pooled cross-sectional analysis and longitudinal analysis */
-	
-	/******** Longitudinal weights over the course of 2 years - self made ********/
-
-	/* For each period, run a logit regression predicting the prob of the individual being 
-	  in wave based on characteristics in previous (even) wave */
-	  
-	* Need to tsfill to start with
-	tsfill, full
-	
-	* Our outcome variable is whether you have a full interview in the current period 
-	replace ivfio = 0 if missing(ivfio)
-	
-	local predictors tenure hvalue sex couple married numkids age jbterm1 jbsize jbsect ///
-		jbpen jbpenm region jb1tenure jb1hrs jb1earn nonlabinc saved
-	
-	* Check our predictors don't have missing values
-	//sum `predictors' if wave != 10
-	
-	* Create temp variables with no missings 
-	foreach var of varlist tenure jbterm1 jbsect jbpenm region sex {
-		gen `var'_temp = `var'
-		qui sum `var'
-		replace `var'_temp = `=r(max)+1' if (missing(`var'_temp) | `var' < 0) & (rxwgt != 0 & !missing(rxwgt))
-		replace `var'_temp = . if rxwgt == 0 | missing(rxwgt)
-	}
-	foreach var of varlist hvalue jb1earn nonlabinc jb1hrs saved {
-		gen `var'_temp = `var'
-		replace `var'_temp = 0 if missing(`var') & (rxwgt != 0 & !missing(rxwgt))
-		replace `var'_temp = . if rxwgt == 0 | missing(rxwgt)
-	}
-	
-	local predictors_new "i.tenure_temp hvalue_temp i.sex_temp i.couple i.married i.numkids age i.jbterm1_temp"
-	local predictors_new "`predictors_new' i.jbsect_temp i.jbpenm_temp i.region_temp jb1hrs_temp" 
-	local predictors_new "`predictors_new' jb1earn_temp nonlabinc_temp saved_temp i.wave"
-	
-	* Predict future response 
-	qui stepwise, pr(0.05): logit ivfio L.(`predictors_new') if L.rxwgt != 0 & !missing(L.rxwgt)
-	predict prob2 if ivfio == 1 & rxwgt != 0 & L.rxwgt != 0 & !missing(L.rxwgt)
-	
-	* Make new weight 
-	gen weight_new_li2 = rxwgt / prob2 if !missing(prob2)
-	replace weight_new_li2 = 0 if missing(weight_new_li2)
-	
-	drop *temp
-	
-	* Just keep people with full interviews 
-	keep if ivfio == 1
-	
-	
-	/******** Longitudinal weights in USoc ********/
-	/* The USoc longitudinal weights are in the variables `w'_indinub_lw and `w'_indinui_lw.
-	  `w'_indinub_lw contains weights starting in wave 2, while `w'_indinui_lw starts in wave 6.
-	  So make a single weight using the right longitudinal weight for each wave */
-	gen weight_li = ltwgt_ub if inrange(wave, 4, 6)
-	replace weight_li = ltwgt_ui if inrange(wave, 8, 10)
-	
-	/******** Balanced panel weights in USoc ********/
-	/* The USoc longitudinal weights are in the variables `w'_indinub_lw and `w'_indinui_lw.
-	  `w'_indinub_lw contains weights starting in wave 2, while `w'_indinui_lw starts in wave 6.
-	  So make a single weight using the right longitudinal weight for each wave */
-	gen weight_li_bp_temp = ltwgt_ub if wave == 10
-	by pidp: egen weight_li_bp = max(weight_li_bp_temp)
-	drop weight_li_bp_temp
+	drop _merge
 
 end
 
@@ -187,44 +145,6 @@ program define clean_pension_vars
 	* Pension contribution rate, conditional on being a member of a pension 
 	gen ownperc_cond = ownperc if jbpenm == 1
 	label var ownperc_cond "Employee contribution rate, workplace pension members only"
-	
-	/********** Changes in workplace pension saving **********/
-
-	* Generate variables for changes in pension saving 
-	gen join_workplace_pension  = (jbpenm == 1 & L.jbpenm == 0) if L.jbpenm == 0 & inlist(jbpenm, 0, 1)
-	gen leave_workplace_pension = (jbpenm == 0 & L.jbpenm == 1) if L.jbpenm == 1 & inlist(jbpenm, 0, 1)
-	
-	gen nopen_to_pen 	= (jbpenm == 1 & L.jbpenm == 0) if inlist(jbpenm, 0, 1) & inlist(L.jbpenm, 0, 1)
-	gen pen_to_nopen 	= (jbpenm == 0 & L.jbpenm == 1) if inlist(jbpenm, 0, 1) & inlist(L.jbpenm, 0, 1)
-	gen pen_to_pen		= (jbpenm == 1 & L.jbpenm == 1) if inlist(jbpenm, 0, 1) & inlist(L.jbpenm, 0, 1)
-	gen nopen_to_nopen 	= (jbpenm == 0 & L.jbpenm == 0) if inlist(jbpenm, 0, 1) & inlist(L.jbpenm, 0, 1)
-	
-	gen delta_ownperc = ownperc - L.ownperc if !missing(ownperc, L.ownperc)
-	gen ownperc_change = delta_ownperc != 0 if !missing(delta_ownperc)
-	gen delta_ownperc_cond = ownperc - L.ownperc if !missing(ownperc, L.ownperc) & jbpenm == 1 & L.jbpenm == 1
-	gen ownperc_change_cond = delta_ownperc_cond != 0 if !missing(delta_ownperc_cond)
-	
-	* Trim really big changes in contribution rates 
-	replace delta_ownperc = . if abs(delta_ownperc) > 15
-	replace delta_ownperc_cond = . if abs(delta_ownperc_cond) > 15
-
-	* Indicator variables for different amounts of changes in contributions 
-	gen ownperc_same    = inrange(delta_ownperc, -0.05, 0.05) if !missing(delta_ownperc)
-	gen ownperc_inc_2p5 = delta_ownperc > 0.05 & delta_ownperc <= 2.5 if !missing(delta_ownperc)
-	gen ownperc_inc_5   = delta_ownperc > 2.5  & delta_ownperc <= 5 if !missing(delta_ownperc)
-	gen ownperc_inc_mt5 = delta_ownperc > 5 if !missing(delta_ownperc)
-	gen ownperc_dec_2p5 = delta_ownperc < -0.05 & delta_ownperc >= -2.5 if !missing(delta_ownperc)
-	gen ownperc_dec_5   = delta_ownperc < -2.5  & delta_ownperc >= -5 if !missing(delta_ownperc)
-	gen ownperc_dec_mt5 = delta_ownperc < -5 if !missing(delta_ownperc)
-	
-	local if2 "jbpenm == 1 & L.jbpenm == 1"
-	gen ownperc_same_cond    = inrange(delta_ownperc, -0.05, 0.05) if !missing(delta_ownperc) & `if2'
-	gen ownperc_inc_2p5_cond = delta_ownperc > 0.05 & delta_ownperc <= 2.5 if !missing(delta_ownperc) & `if2'
-	gen ownperc_inc_5_cond   = delta_ownperc > 2.5  & delta_ownperc <= 5 if !missing(delta_ownperc) & `if2'
-	gen ownperc_inc_mt5_cond = delta_ownperc > 5 if !missing(delta_ownperc) & `if2'
-	gen ownperc_dec_2p5_cond = delta_ownperc < -0.05 & delta_ownperc >= -2.5 if !missing(delta_ownperc) & `if2'
-	gen ownperc_dec_5_cond   = delta_ownperc < -2.5  & delta_ownperc >= -5 if !missing(delta_ownperc) & `if2'
-	gen ownperc_dec_mt5_cond = delta_ownperc < -5 if !missing(delta_ownperc) & `if2'
 	
 
 end
@@ -281,78 +201,6 @@ program define clean_circumstance_vars
 
 end
 
-capture program drop make_circumstance_changes
-program define make_circumstance_changes
-
-	/* Variables denoting changes in household circumstances */
-	
-	* First make marstat missing if -9
-	replace marstat_dv = . if marstat_dv < 0
-	 
-	 * Make number of children equal to zero if missing because living alone 
-	 replace ndepchl_dv = 0 if ndepchl_dv == -8
-	
-	* Children 
-	gen still_no_child   = (ndepchl_dv == 0 & L.ndepchl_dv == 0) if !missing(ndepchl_dv, L.ndepchl_dv)
-	gen first_child    	 = (ndepchl_dv > 0 & L.ndepchl_dv == 0) if !missing(ndepchl_dv, L.ndepchl_dv)
-	gen additnl_child	 = (ndepchl_dv > L.ndepchl_dv & L.ndepchl_dv > 0) if !missing(ndepchl_dv, L.ndepchl_dv)
-	gen child_leaves     = (ndepchl_dv < L.ndepchl_dv) if !missing(ndepchl_dv, L.ndepchl_dv)
-	gen still_same_child = (ndepchl_dv >= 1 & ndepchl_dv == L.ndepchl_dv) if !missing(ndepchl_dv, L.ndepchl_dv)
-	
-	gen child_change = 1 if still_no_child == 1 | still_same_child == 1
-	replace child_change = 2 if first_child == 1
-	replace child_change = 3 if additnl_child == 1
-	replace child_change = 4 if child_leaves == 1
-	label define child_change 1 "No child change" 2 "First child" 3 "Additional child" 4 "Child leaves"
-	label values child_change child_change
-	
-	* Children starting school
-	*Can you just define this in an analogous way to the children variable, but making it an indicator for being 
-	*above 5 years old? Or maybe below?
-	* DON'T BOTHER
-	
-	* Change in relationship status 
-	gen still_married   = (marstat_dv == 1 & L.marstat_dv == 1) if !missing(marstat_dv, L.marstat_dv)
-	gen leave_marriage  = (marstat_dv != 1 & L.marstat_dv == 1) if !missing(marstat_dv, L.marstat_dv)
-	gen get_married     = (marstat_dv == 1 & L.marstat_dv != 1) if !missing(marstat_dv, L.marstat_dv)
-	gen still_not_marrd = (marstat_dv != 1 & L.marstat_dv != 1) if !missing(marstat_dv, L.marstat_dv)
-	
-	gen marital_change = 1 if still_not_marrd == 1 | still_married == 1
-	replace marital_change = 2 if get_married == 1
-	replace marital_change = 3 if leave_marriage == 1
-	label define marital_change 1 "No marriage change" 2 "Get married" 3 "Leave marriage"
-	label values marital_change marital_change
-	
-	* Change in mortgage
-	gen still_mortgage  = (tenure == 2 & L.tenure == 2) if !missing(tenure, L.tenure)
-	gen new_mortgage    = (tenure == 2 & L.tenure != 2) if !missing(tenure, L.tenure)
-	gen fin_mortgage    = (tenure == 1 & L.tenure == 2) if !missing(tenure, L.tenure)
-	gen still_no_mortge = (tenure != 2 & L.tenure != 2) if !missing(tenure, L.tenure)
-	gen mortge_to_rent  = (inrange(tenure, 3, 7) & L.tenure == 2) if !missing(tenure, L.tenure)
-	
-	gen mortgage_change = 1 if still_no_mortge == 1 | still_mortgage == 1
-	replace mortgage_change = 2 if new_mortgage == 1
-	replace mortgage_change = 3 if fin_mortgage == 1
-	replace mortgage_change = 4 if mortge_to_rent == 1
-	label define mortgage_change 1 "No mortgage change" 2 "New mortgage" 3 "Paid off mortgage" ///
-		4 "Mortgage to renter"
-	label values mortgage_change mortgage_change 
-	
-	* Change in partner work status 
-	gen part_start_work  = (partner_inwork == 1 & L.partner_inwork == 0)
-	gen part_stop_work   = (partner_inwork == 0 & L.partner_inwork == 1)
-	gen part_never_work  = (partner_inwork == 0 & L.partner_inwork == 0)
-	gen part_still_work  = (partner_inwork == 1 & L.partner_inwork == 1)
-	
-	gen partner_work_change = 1 if part_never_work == 1 | part_still_work == 1
-	replace partner_work_change = 2 if part_start_work == 1
-	replace partner_work_change = 3 if part_stop_work == 1
-	label define partner_work_change 1 "No partner work change" 2 "Partner starts work" 3 "Partner stops work"
-	label values partner_work_change partner_work_change
-	
-
-end
-
 capture program drop clean_job_vars 
 program define clean_job_vars  
 
@@ -370,103 +218,10 @@ program define clean_job_vars
 	replace jbsize_broad = 3 if inrange(jbsize, 7, 9)
 	label define jbsize_broad 1 "1-24" 2 "25-199" 3 "200+"
 	label values jbsize_broad jbsize_broad
-	
-	* Change in (log) earnings 
-	gen log_earn = ln(jb1earn)
-	gen change_log_earn = log_earn - L.log_earn
-	label var change_log_earn "Change in log earnings"
-	
-	* Change in hours 
-	gen change_hrs = jb1hrs - L.jb1hrs 
-	label var change_hrs "Change in usual weekly hours (excl. overtime)"
 
 
 end
 
-capture program drop create_lagged_vars
-program define create_lagged_vars 
-
-	/* Create variables containing lags of some variables */
-	
-	* Lag of whether in public sector 
-	gen lag_public = L.public
-	label values lag_public public 
-	
-	* Lag of education (this is equal for nearly all of our sample)
-	gen lag_edgrpnew = L.edgrpnew
-	label values lag_edgrpnew edgrpnew 
-	
-	* Lag of region 
-	gen lag_region = L.region 
-	label values lag_region region 
-	
-
-end
-
-capture program drop main
-program define main 
-
-	* First job is to use data from all waves of BHPS and USoc to work out someone's education level 
-	* This variable is coded as missing if someone already answered this question in an earlier wave and their 
-	* ed level hasn't changed. So use all waves to copy previous answers to other waves 
-	* Then after that just keep USoc
-	clean_ff_vars
-	
-	* Just keep USoc observations 
-	keep if wave > 0
-	
-	* Next, make a variable indicating if they changed employer/job over the course of two years 
-	make_employer_change
-	
-	* Just keep even waves when we have pension data and declare as panel data with only even waves
-	keep if mod(wave, 2) == 0
-	xtset pidp wave, delta(2)
-	
-	* Make partner variables 
-	make_partner_vars
-	
-	* Drop people with proxy interviews 
-	keep if ivfio == 1
-	
-	* Make weights 
-	make_weights
-
-	* Drop households if anyone in them has a missing interview year (this is only a few obs)
-	gen missing_intyear = missing(intyear)
-	egen missing_intyear_hh = sum(missing_intyear), by(wave hidp)
-	qui count if missing_intyear_hh == 1
-	assert r(N) < 30
-	drop if missing_intyear_hh == 1
-	drop missing_intyear*
-	
-	* Clean pension variables, and create variables for changes in pension saving over the course of two waves 
-	clean_pension_vars 
-	
-	* Clean some of the circumstance variables
-	clean_circumstance_vars
-	
-	* Make variables for changes in marital status/children/mortgage 
-	make_circumstance_changes
-	
-	* Clean job-related variables, and create variables for changes in job-related info 
-	clean_job_vars 
-	
-	* Create lags of some variables
-	create_lagged_vars
-	
-	* Who do we want in our sample? 22-59 year olds?
-	keep if inrange(age, 22, 59)
-	
-	* Drop superfluous variables 
-	drop pid hid buno
-	
-	* Save
-	save "$workingdata/usoc_clean", replace
-
-	
-	
-
-end
 
 
 
