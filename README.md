@@ -35,7 +35,7 @@ Git is an open-source version control system and is used in the vast majority of
 
 To learn the principles behind git, I would recommend watching an IFS Tech presentation that Max gave a few weeks ago - see the useful_resources folder for a link. The [Git handbook](https://docs.github.com/en/get-started/using-git/about-git) is another great resource.
 
-## 2. Getting up to speed with Github and the Github Flow workflow
+### 2. Getting up to speed with Github and the Github Flow workflow
 
 We'll store the repository of our code on Github, and will use it to structure the tasks and communication around the project. Specifically, we'll use the Github Flow workflow. Here are some resources for understanding this:
 
