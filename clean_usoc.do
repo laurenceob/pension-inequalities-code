@@ -198,6 +198,32 @@ program define clean_circumstance_vars
 	cap label drop female 
 	label define female 0 "Men" 1 "Women"
 	label values female female 
+	
+	gen racea = .
+	replace racea = 1 if inlist(racel, 1,2,3,4)
+	replace racea = 2 if inlist(racel, 5,6,7,8)
+	replace racea = 3 if inlist(racel, 9,10,11,12,13)
+	replace racea = 4 if inlist(racel, 14,15,16)
+	replace racea = 5 if inlist(racel, 17,18)
+	label define racelab 1 "White" 2 "Mixed" 3 "Asian" 4 "Black" 5 "Other"
+	label values racea racelab
+
+	*new race variable - for graph
+	gen raceb = .
+	replace raceb = 1 if inlist(racel, 1,2,3,4) //white
+	replace raceb = 2 if inlist(racel, 5,6,7,8) //mixed
+	replace raceb = 3 if racel == 9 //Indian
+	replace raceb = 4 if racel == 10 //Pakistani
+	replace raceb = 5 if racel == 11 //Bangladeshi
+	replace raceb = 6 if inlist(racel, 12,13) //Other Asian
+	replace raceb = 7 if racel == 14 //Caribbean
+	replace raceb = 8 if racel == 15 //African
+	replace raceb = 9 if racel == 16 //Other Black
+	replace raceb = 10 if inlist(racel, 17,18) //Other
+	label define racelab1 1 "White" 2 "Mixed" 3 "Indian" 4 "Pakistani" 5 "Bangladeshi" 6 "Other Asian" 7 "Caribbean" 8 "African" 9 "Other Black" 10 "Other"
+	label values raceb racelab1
+
+	order racea raceb, after(racel)
 
 end
 
