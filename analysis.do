@@ -5,6 +5,8 @@ global path_JK "P:\JPI_PENSINEQ\Inequalities\Summer_student\analysis" //settom
 local a JK
 cd "${path_`a'}\data"
 use "usoc_clean.dta", clear 
+drop if econstat == 3 //drops those who are unemployed
+gen x = 100*jbpenm // so that pension membership is /100
 
 *------------------------------------------------------------------------------
 local a JK
@@ -12,12 +14,12 @@ cd "${path_`a'}\output"
 
 *graphs of pension membership/contributions by race
 preserve
-collapse (mean) ownperc ownperc_cond jbpenm [pw=rxwgt], by(raceb)
-format jbpenm ownperc ownperc_cond %3.2f 
+collapse (mean) ownperc ownperc_cond x [pw=rxwgt], by(raceb)
+format x ownperc ownperc_cond %3.2f 
 /*mylabels 0(.2).8, clean local(labels) //change 0.0 to 0 on y axis
 twoway bar jbpenm raceb, ylabel(`labels', grid format(%03.1f)) xlabel(1 2 3 4 5 6 7 8 9 10, angle(45) valuelabel) ytitle("Pension Membership (%)") color(orange) barwidth(0.6) plotregion(margin(zero)) xtitle("")
 */
-graph bar jbpenm, over(raceb, label(angle(45))) ytitle("Membership Rate (%)")
+graph bar x, over(raceb, label(angle(45))) ytitle("Membership Rate (%)")
 graph export "pension_mem.pdf", replace
 
 *unconditional
@@ -36,8 +38,8 @@ restore
 foreach i in region health edgrpnew raceb{
     preserve
 	tempfile `i'_t
-	collapse (mean) ownperc ownperc_cond jbpenm [pw=rxwgt], by(`i')
-	format jbpenm ownperc ownperc_cond %3.2f 
+	collapse (mean) ownperc ownperc_cond x [pw=rxwgt], by(`i')
+	format x ownperc ownperc_cond %3.2f 
 	decode `i', gen(category)
 	save ``i'_t'
 	restore
@@ -50,7 +52,7 @@ order category
 label var category "Category"
 label var ownperc "Unconditional Contribution Rate"
 label var ownperc_cond " Conditional Contribution Rate"
-label var jbpenm "Membership Rate"
+label var x "Membership Rate"
 drop if inlist(category, "region missing", "Missing", "Refused", "Dont know", "")
 replace category = "Health Problem" if category == "Yes"
 replace category = "No Health Problem" if category == "No"
