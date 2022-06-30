@@ -127,38 +127,6 @@ estadd local age_fe "Yes"
 esttab using pen_age_race.tex, se replace mtitles("Membership" "Uncond. Contribution Rate" "Cond. Contribution Rate") label drop(1.raceb) addnotes("Coefficients compare outcome of interest for the stated ethnic group compared to Whites, controlling for age fixed effects") stat(age_fe N, label("Age FE" "Observations")) 
 eststo clear
 
-*2 PUBLIC VS PRIVATE SECTOR [public = 1 if in public sector]
-
-preserve
-
-collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(age_dum public)
-twoway connected pen_mem age_dum if public == 0, ytitle("Membership Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Private") lab(2 "Public")) || connected pen_mem age_dum if public == 1
-graph export "mem_age_pub.pdf", replace
-
-twoway connected ownperc age_dum if public == 0, ytitle("Unconditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Private") lab(2 "Public")) || connected ownperc age_dum if public == 1
-graph export "cont_age_pub.pdf", replace
-
-twoway connected ownperc_cond age_dum if public == 0, ytitle("Conditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Private") lab(2 "Public")) || connected ownperc_cond age_dum if public == 1
-graph export "cont_c_age_pub.pdf", replace
-
-restore
-
-*3 HEALTH STATUS
-
-preserve
-
-collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(age_dum health)
-twoway connected pen_mem age_dum if health == 1, ytitle("Membership Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected pen_mem age_dum if health == 2
-graph export "mem_age_health.pdf", replace
-
-twoway connected ownperc age_dum if health == 1, ytitle("Unconditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected ownperc age_dum if health == 2
-graph export "cont_age_health.pdf", replace
-
-twoway connected ownperc_cond age_dum if health == 1, ytitle("Conditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected ownperc_cond age_dum if health == 2
-graph export "cont_c_age_health.pdf", replace
-
-restore
-
 *Checking distribution of age by ethnic group
 estpost tabstat age, by(raceb) statistics(count mean sd) columns(statistics) listwise
 esttab using dist_age_race.tex, replace cell("count mean sd") noobs nonumber
@@ -181,9 +149,75 @@ label var fx10 "Other"
 line fx1 fx2 fx3 fx4 fx5 fx6 fx7 fx8 fx9 fx10 x, sort ytitle(Density)
 graph export "dens_age_race.pdf", replace
 
+*2 PUBLIC VS PRIVATE SECTOR [public = 1 if in public sector]
+
+preserve
+
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(age_dum public)
+twoway connected pen_mem age_dum if public == 0, ytitle("Membership Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Private") lab(2 "Public")) || connected pen_mem age_dum if public == 1
+graph export "mem_age_pub.pdf", replace
+
+twoway connected ownperc age_dum if public == 0, ytitle("Unconditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Private") lab(2 "Public")) || connected ownperc age_dum if public == 1
+graph export "cont_age_pub.pdf", replace
+
+twoway connected ownperc_cond age_dum if public == 0, ytitle("Conditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Private") lab(2 "Public")) || connected ownperc_cond age_dum if public == 1
+graph export "cont_c_age_pub.pdf", replace
+
+restore
+
+*Checking distribution of age by sector
+kdensity age, nograph gen(y fy)
+forvalues i=0/1{
+	kdensity age if public == `i', nograph gen(fy`i') at(y)
+}
+label var fy0 "Private"
+label var fy1 "Public"
+line fy0 fy1 y, sort ytitle(Density)
+graph export "dens_age_pub.pdf", replace
+
+
+*3 HEALTH STATUS
+
+preserve
+
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(age_dum health)
+twoway connected pen_mem age_dum if health == 1, ytitle("Membership Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected pen_mem age_dum if health == 2
+graph export "mem_age_health.pdf", replace
+
+twoway connected ownperc age_dum if health == 1, ytitle("Unconditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected ownperc age_dum if health == 2
+graph export "cont_age_health.pdf", replace
+
+twoway connected ownperc_cond age_dum if health == 1, ytitle("Conditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected ownperc_cond age_dum if health == 2
+graph export "cont_c_age_health.pdf", replace
+
+restore
+
+*checking distribution of age by health status
+kdensity age, nograph gen(z fz)
+forvalues i=1/2{
+	kdensity age if health == `i', nograph gen(fz`i') at(z)
+}
+label var fz1 "Health Condition"
+label var fz2 "No Health Condition"
+line fz1 fz2 z, sort ytitle(Density)
+graph export "dens_age_health.pdf", replace
+
 
 *---------TIME TRENDS--------------------------------------------------------------
+local a JK
+cd "${path_`a'}\output"
+preserve
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(age)
+twoway scatter pen_mem age, ytitle("Membership Rate (%)") legend(label(1 "Membership"))   || lfit pen_mem age 
+graph export "mem_age.pdf", replace
 
+twoway scatter ownperc age, ytitle("Unconditional Contribution Rate (%)") legend(label(1 "Cont. Rate"))   || lfit ownperc age 
+graph export "cont_age.pdf", replace
+
+twoway scatter ownperc_cond age, ytitle("Conditional Contribution Rate (%)") legend(label(1 "Cont. Rate"))   || lfit ownperc_cond age 
+graph export "cont_c_age.pdf", replace
+
+restore
 
 
 
