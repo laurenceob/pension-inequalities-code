@@ -1,45 +1,82 @@
+/********************************************************************************
+**** Title: 		analysis.do 
+**** Author: 		Jack Kemp 
+**** Date started: 	27/06/2022 
+**** Description:	This do file produces output for pension inequalities project
+********************************************************************************/
+
+*-----------------------------------STARTUP-------------------------------------
+capture program start
+program define start
+
 set scheme s1color //good looking graph theme
 ssc install mylabels // installed for clean axis look
-ssc install listtab
-ssc install outreg2
-ssc install reghdfe
-ssc install ftools
-ssc install oaxaca
-ssc install coefplot
+ssc install listtab //table output
+ssc install outreg2 //table output
+ssc install reghdfe //fixed effects regression
+ssc install ftools //needed for reghdfe
+ssc install oaxaca //oaxaca decomposition
+
+*setting working directory
+
 global path_JK "P:\JPI_PENSINEQ\Inequalities\Summer_student\analysis" 
 local a JK
 cd "${path_`a'}\data"
 use "usoc_clean.dta", clear 
+
+
+***********************IMPORTANT****************************************
 keep if inlist(econstat, 1, 2)  //drops those who are unemployed; 29,411 dropped
 gen pen_mem = 100*jbpenm // so that pension membership is /100
+************************************************************************
 
-*------------------------------------------------------------------------------
+*creating age dummy 
+gen age_dum = 0 if inrange(age,22,25)
+replace age_dum = 1 if inrange(age,26,29)
+replace age_dum = 2 if inrange(age,30,33)
+replace age_dum = 3 if inrange(age,34,37)
+replace age_dum = 4 if inrange(age,38,41)
+replace age_dum = 5 if inrange(age,42,45)
+replace age_dum = 6 if inrange(age,46,49)
+replace age_dum = 7 if inrange(age,50,53)
+replace age_dum = 8 if inrange(age,54,57)
+replace age_dum = 9 if inrange(age,58,59)
+label define age_dum1 0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59"
+label values age_dum age_dum1
+
+*creating age dummy 1
+gen age_dum_1 = 0 if inrange(age,22,29)
+replace age_dum_1 = 1 if inrange(age,30,39)
+replace age_dum_1 = 2 if inrange(age,40,49)
+replace age_dum_1 = 3 if inrange(age,50,59)
+label define age_dumx 0 "22-29" 1 "30-39" 2 "40-49" 3 "50-59" 
+label values age_dum_1 age_dumx
+
+end
+
+*--------------------------------SUMMARY STATS----------------------------------
+capture program drop sum
+program define sum
+
 local a JK
 cd "${path_`a'}\output"
-
 *graphs of pension membership/contributions by race
 preserve
 collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(raceb)
 format pen_mem ownperc ownperc_cond %3.2f 
-/*mylabels 0(.2).8, clean local(labels) //change 0.0 to 0 on y axis
-twoway bar jbpenm raceb, ylabel(`labels', grid format(%03.1f)) xlabel(1 2 3 4 5 6 7 8 9 10, angle(45) valuelabel) ytitle("Pension Membership (%)") color(orange) barwidth(0.6) plotregion(margin(zero)) xtitle("")
-*/
-graph bar pen_mem, over(raceb, label(angle(45))) ytitle("Membership Rate (%)")
-graph export "pension_mem.pdf", replace
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
 
-*unconditional
-graph bar ownperc, over(raceb, label(angle(45))) ytitle("Unconditional Contribution Rate (%)")
-graph export "pension_cont.pdf", replace
-
-*conditional
-graph bar ownperc_cond, over(raceb, label(angle(45))) ytitle("Conditional Contribution Rate (%)")
-graph export "pension_cont_c.pdf", replace
-
+	graph bar `x', over(raceb, label(angle(45))) ytitle("`ytitle'")
+	graph export "`x'.pdf", replace
+}
 restore
 
 
 *table output of summary statistics by region, education [edgrpnew](highest qualification), health (long standing illness or disability)
-
 foreach i in region health edgrpnew raceb{
     preserve
 	tempfile `i'_t
@@ -63,52 +100,51 @@ replace category = "Health Problem" if category == "Yes"
 replace category = "No Health Problem" if category == "No"
 listtab using "pen_saving_by_groups_simple.tex", rstyle(tabular) replace
 
-*------AGE TRENDS--------------------------------------------------------------
+local a JK
+cd "${path_`a'}\data"
+use "usoc_clean.dta", clear
+
+end
+
+*----------------------------------AGE TRENDS-----------------------------------
+capture program drop age_trends
+program define age_trends
 
 *graph for pension contributions by age
 tab age //over 2000 observations per age (22-59)
-
-gen age_dum = 0 if inrange(age,22,25)
-replace age_dum = 1 if inrange(age,26,29)
-replace age_dum = 2 if inrange(age,30,33)
-replace age_dum = 3 if inrange(age,34,37)
-replace age_dum = 4 if inrange(age,38,41)
-replace age_dum = 5 if inrange(age,42,45)
-replace age_dum = 6 if inrange(age,46,49)
-replace age_dum = 7 if inrange(age,50,53)
-replace age_dum = 8 if inrange(age,54,57)
-replace age_dum = 9 if inrange(age,58,59)
-label define age_dum1 0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59"
-label values age_dum age_dum1
-
-
 local a JK
 cd "${path_`a'}\output"
+
+*The year 2020 is not included since very few observations
 preserve
 collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(age)
-twoway scatter pen_mem age, ytitle("Membership Rate (%)") legend(label(1 "Membership"))   || lfit pen_mem age 
-graph export "mem_age.pdf", replace
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+		local lab "Membership"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+		local lab "Cont. Rate"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+		local lab "Cont. Rate"
 
-twoway scatter ownperc age, ytitle("Unconditional Contribution Rate (%)") legend(label(1 "Cont. Rate"))   || lfit ownperc age 
-graph export "cont_age.pdf", replace
-
-twoway scatter ownperc_cond age, ytitle("Conditional Contribution Rate (%)") legend(label(1 "Cont. Rate"))   || lfit ownperc_cond age 
-graph export "cont_c_age.pdf", replace
-
+	twoway scatter `x' age, ytitle("`ytitle'") legend(lab(1 "`lab'")) || lfit `x' age 
+	graph export "`x'_age.pdf", replace
+}
 restore
 
-*1. RACE 
+*1.---------------------------- RACE----------------------------------------------- 
 
 preserve
 collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(age_dum raceb)
-twoway connected pen_mem age_dum if raceb == 1, ytitle("Membership Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Caribbean") lab(7 "African")) || connected pen_mem age_dum if raceb == 2 || connected pen_mem age_dum if raceb == 3 || connected pen_mem age_dum if raceb == 4 || connected pen_mem age_dum if raceb == 5 || connected pen_mem age_dum if raceb == 7 || connected pen_mem age_dum if raceb == 8 
-graph export "mem_age_race.pdf", replace
-
-twoway connected ownperc age_dum if raceb == 1, ytitle("Unconditional Contribution Rate (%)") xtitle("Age Group") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Caribbean") lab(7 "African")) || connected ownperc age_dum if raceb == 2 || connected ownperc age_dum if raceb == 3 || connected ownperc age_dum if raceb == 4 || connected ownperc age_dum if raceb == 5 || connected ownperc age_dum if raceb == 7 || connected ownperc age_dum if raceb == 8 
-graph export "cond_age_race.pdf", replace
-
-twoway connected ownperc_cond age_dum if raceb == 1, ytitle("Conditional Contribution Rate (%)") xtitle("Age Group") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Caribbean") lab(7 "African")) || connected ownperc_cond age_dum if raceb == 2 || connected ownperc_cond age_dum if raceb == 3 || connected ownperc_cond age_dum if raceb == 4 || connected ownperc_cond age_dum if raceb == 5 || connected ownperc_cond age_dum if raceb == 7 || connected ownperc_cond age_dum if raceb == 8 
-graph export "cond_c_age_race.pdf", replace
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' age_dum if raceb == 1, ytitle("`ytitle'") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Caribbean") lab(7 "African")) || connected `x' age_dum if raceb == 2 || connected `x' age_dum if raceb == 3 || connected `x' age_dum if raceb == 4 || connected `x' age_dum if raceb == 5 || connected `x' age_dum if raceb == 7 || connected `x' age_dum if raceb == 8 
+	graph export "`x'_age_race.pdf", replace
+}
 restore
 
 *regression output for pension cont and membership by race, controlling for age
@@ -151,20 +187,19 @@ label var fx10 "Other"
 line fx1 fx2 fx3 fx4 fx5 fx6 fx7 fx8 fx9 fx10 x, sort ytitle(Density)
 graph export "dens_age_race.pdf", replace
 
-*2 PUBLIC VS PRIVATE SECTOR [public = 1 if in public sector]
+*2----------------- PUBLIC VS PRIVATE SECTOR [public = 1 if in public sector]----------------
 
 preserve
-
 collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(age_dum public)
-twoway connected pen_mem age_dum if public == 0, ytitle("Membership Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Private") lab(2 "Public")) || connected pen_mem age_dum if public == 1
-graph export "mem_age_pub.pdf", replace
-
-twoway connected ownperc age_dum if public == 0, ytitle("Unconditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Private") lab(2 "Public")) || connected ownperc age_dum if public == 1
-graph export "cont_age_pub.pdf", replace
-
-twoway connected ownperc_cond age_dum if public == 0, ytitle("Conditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Private") lab(2 "Public")) || connected ownperc_cond age_dum if public == 1
-graph export "cont_c_age_pub.pdf", replace
-
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' age_dum if public == 0, ytitle("`ytitle'") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Private") lab(2 "Public")) || connected `x' age_dum if public == 1
+	graph export "`x'_age_pub.pdf", replace
+}
 restore
 
 *Checking distribution of age by sector
@@ -178,20 +213,18 @@ line fy0 fy1 y, sort ytitle(Density)
 graph export "dens_age_pub.pdf", replace
 
 
-*3 HEALTH STATUS
-
+*3------------------------------HEALTH STATUS----------------------------------
 preserve
-
 collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(age_dum health)
-twoway connected pen_mem age_dum if health == 1, ytitle("Membership Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected pen_mem age_dum if health == 2
-graph export "mem_age_health.pdf", replace
-
-twoway connected ownperc age_dum if health == 1, ytitle("Unconditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected ownperc age_dum if health == 2
-graph export "cont_age_health.pdf", replace
-
-twoway connected ownperc_cond age_dum if health == 1, ytitle("Conditional Contribution Rate (%)") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected ownperc_cond age_dum if health == 2
-graph export "cont_c_age_health.pdf", replace
-
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' age_dum if health == 1, ytitle("`ytitle'") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected `x' age_dum if health == 2
+	graph export "`x'_age_health.pdf", replace
+}
 restore
 
 *checking distribution of age by health status
@@ -205,66 +238,153 @@ line fz1 fz2 z, sort ytitle(Density)
 graph export "dens_age_health.pdf", replace
 
 
-*---------TIME TRENDS--------------------------------------------------------------
+*------------------------------REGION-------------------------------------------
+kdensity age, nograph gen(a fa)
+forvalues i=1/12{
+	kdensity age if region == `i', nograph gen(fa`i') at(a)
+}
+label var fa1 "North East"
+label var fa2 "North West and Merseyside"
+label var fa3 "Yorks and Humberside"
+label var fa4 "East Midlands"
+label var fa5 "West Midlands"
+label var fa6 "Eastern"
+label var fa7 "London"
+label var fa8 "South East"
+label var fa9 "South West"
+label var fa10 "Wales"
+label var fa11 "Scotland"
+label var fa12 "Northern Ireland"
+line fa1 fa2 fa3 fa4 fa5 fa6 fa7 fa8 fa9 fa10 fa11 fa12 a, sort ytitle(Density)
+graph export "dens_age_region.pdf", replace
+
+*-----------------------------EDUCATION-----------------------------------------
+kdensity age, nograph gen(b fb)
+forvalues i=0/5{
+	kdensity age if edgrpnew == `i', nograph gen(fb`i') at(b)
+}
+label var fb0 "None of the above"
+label var fb1 "Less than GCSEs"
+label var fb2 "GCSEs"
+label var fb3 "A-Levels"
+label var fb4 "Vocational higher"
+label var fb5 "University"
+line fb0 fb1 fb2 fb3 fb4 fb5 b, sort ytitle(Density)
+graph export "dens_age_edu.pdf", replace
+
+preserve
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(age_dum_1 edgrpnew)
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' age_dum_1 if edgrpnew == 0, ytitle("`ytitle'") xlabel(0 "22-29" 1 "30-39" 2 "40-49" 3 "50-59", angle(45)) xtitle("Age Group") legend(lab(1 "None of the above") lab(2 "Less than GCSEs") lab(3 "GCSEs") lab(4 "A-levels") lab(5 "Vocational higher") lab(6 "University")) || connected `x' age_dum_1 if edgrpnew == 1 || connected `x' age_dum_1 if edgrpnew == 2 || connected `x' age_dum_1 if edgrpnew == 3 || connected `x' age_dum_1 if edgrpnew == 4 || connected `x' age_dum_1 if edgrpnew == 5    
+	graph export "`x'_age_edu.pdf", replace
+}
+restore
+
+
+
+end
+
+*----------------------------------TIME TRENDS----------------------------------
+capture program drop time_trends
+program define time_trends
+
 local a JK
 cd "${path_`a'}\output"
 preserve
+drop if intyear == 2020
 collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(intyear)
-twoway connected pen_mem intyear, ytitle("Membership Rate (%)") legend(label(1 "Membership"))   || lfit pen_mem intyear 
-graph export "mem_time.pdf", replace
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+		local lab "Membership"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+		local lab "Cont. Rate"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+		local lab "Cont. Rate"
 
-twoway connected ownperc intyear, ytitle("Unconditional Contribution Rate (%)") legend(label(1 "Cont. Rate"))   || lfit ownperc intyear 
-graph export "cont_time.pdf", replace
-
-twoway connected ownperc_cond intyear, ytitle("Conditional Contribution Rate (%)") legend(label(1 "Cont. Rate"))   || lfit ownperc_cond intyear 
-graph export "cont_c_time.pdf", replace
-
+	twoway connected `x' intyear, ytitle("`ytitle'") legend(lab(1 "`lab'")) || lfit `x' intyear 
+	graph export "`x'_time.pdf", replace
+}
 restore
 
-*RACE
+*---------------------------------------RACE-------------------------------------
 preserve
+drop if intyear == 2020
 collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(intyear raceb)
-twoway connected pen_mem intyear if raceb == 1, ytitle("Membership Rate (%)") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Caribbean") lab(7 "African")) || connected pen_mem intyear if raceb == 2 || connected pen_mem intyear if raceb == 3 || connected pen_mem intyear if raceb == 4 || connected pen_mem intyear if raceb == 5 || connected pen_mem intyear if raceb == 7 || connected pen_mem intyear if raceb == 8 
-graph export "mem_time_race.pdf", replace
-
-twoway connected ownperc intyear if raceb == 1, ytitle("Unconditional Contribution Rate (%)") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Caribbean") lab(7 "African")) || connected ownperc intyear if raceb == 2 || connected ownperc intyear if raceb == 3 || connected ownperc intyear if raceb == 4 || connected ownperc intyear if raceb == 5 || connected ownperc intyear if raceb == 7 || connected ownperc intyear if raceb == 8 
-graph export "cont_time_race.pdf", replace
-
-twoway connected ownperc_cond intyear if raceb == 1, ytitle("Conditional Contribution Rate (%)") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Caribbean") lab(7 "African")) || connected ownperc_cond intyear if raceb == 2 || connected ownperc_cond intyear if raceb == 3 || connected ownperc_cond intyear if raceb == 4 || connected ownperc_cond intyear if raceb == 5 || connected ownperc_cond intyear if raceb == 7 || connected ownperc_cond intyear if raceb == 8 
-graph export "cont_c_time_race.pdf", replace
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' intyear if raceb == 1, ytitle("`ytitle'") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Caribbean") lab(7 "African")) || connected `x' intyear if raceb == 2 || connected `x' intyear if raceb == 3 || connected `x' intyear if raceb == 4 || connected `x' intyear if raceb == 5 || connected `x' intyear if raceb == 7 || connected `x' intyear if raceb == 8 
+	graph export "`x'_time_race.pdf", replace
+}
 restore
 
-*SECTOR
+*---------------------------------------SECTOR----------------------------------
 preserve
+drop if intyear == 2020
 collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(intyear public)
-twoway connected pen_mem intyear if public == 0, ytitle("Membership Rate (%)") legend(lab(1 "Private") lab(2 "Public")) || connected pen_mem intyear if public == 1
-graph export "mem_time_pub.pdf", replace
-
-twoway connected ownperc intyear if public == 0, ytitle("Unconditional Contribution Rate (%)") legend(lab(1 "Private") lab(2 "Public")) || connected ownperc intyear if public == 1
-graph export "cont_time_pub.pdf", replace
-
-twoway connected ownperc_cond intyear if public == 0, ytitle("Conditional Contribution Rate (%)") legend(lab(1 "Private") lab(2 "Public")) || connected ownperc_cond intyear if public == 1
-graph export "cont_c_time_pub.pdf", replace
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' intyear if public == 0, ytitle("`ytitle'") legend(lab(1 "Private") lab(2 "Public")) || connected `x' intyear if public == 1
+	graph export "`x'_time_pub.pdf", replace
+}
 restore
 
-*3 HEALTH STATUS
+*-------------------------------------------HEALTH STATUS------------------------
 preserve
+drop if intyear == 2020
 collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(intyear health)
-twoway connected pen_mem intyear if health == 1, ytitle("Membership Rate (%)") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected pen_mem intyear if health == 2
-graph export "mem_time_health.pdf", replace
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' intyear if health == 1, ytitle("`ytitle'") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected `x' intyear if health == 2
 
-twoway connected ownperc intyear if health == 1, ytitle("Unconditional Contribution Rate (%)") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected ownperc intyear if health == 2
-graph export "cont_time_health.pdf", replace
-
-twoway connected ownperc_cond intyear if health == 1, ytitle("Conditional Contribution Rate (%)") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected ownperc_cond intyear if health == 2
-graph export "cont_c_time_health.pdf", replace
+	graph export "`x'_time_health.pdf", replace
+}
 restore
 
+end
 
-*------------------OAXACA DECOMPOSITION-----------------------------------------
+*------------------------------OAXACA DECOMPOSITION-----------------------------
+capture program drop oaxaca_decom
+program define oaxaca_decom
+
 *using two way decomp - pooled is suggested
-eststo: oaxaca ownperc age [pw=rxwgt] if inrange(health,1,2), by(health) pooled detail //note: only two groups allowed
-esttab using pen_oax.tex, replace label //make table look better!!
-eststo clear
 
+***********************************AGE*****************************************
+
+*------------------------HEALTH-------------------------------------------------
+foreach x in ownperc ownperc_cond pen_mem {
+	eststo: oaxaca `x' age [pw=rxwgt] if inrange(health,1,2), by(health) pooled detail
+	esttab using `x'_oax_health.tex, replace label 
+	eststo clear
+}
+
+*-----------------------EDUCATION-----------------------------------------------
+
+foreach x in ownperc ownperc_cond pen_mem {
+	forvalues i=1/4{
+		eststo: oaxaca `x' age [pw=rxwgt] if inlist(edgrpnew,`i',5), swap by(edgrpnew) pooled detail 
+		esttab using `x'_`i'_oax_edu.tex, replace label
+		eststo clear
+	}
+}
+
+
+end
 
