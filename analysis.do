@@ -18,6 +18,7 @@ ssc install ftools //needed for reghdfe
 ssc install oaxaca //oaxaca decomposition
 
 *setting working directory
+
 global path_JK "P:\JPI_PENSINEQ\Inequalities\Summer_student\analysis" 
 local a JK
 cd "${path_`a'}\data"
