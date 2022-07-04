@@ -187,6 +187,68 @@ label var fx10 "Other"
 line fx1 fx2 fx3 fx4 fx5 fx6 fx7 fx8 fx9 fx10 x, sort ytitle(Density)
 graph export "dens_age_race.pdf", replace
 
+*Creating a table of age by race
+forvalues i=0/9{
+    preserve
+	tempfile age_`i'
+	keep if age_dum == `i'
+	collapse (count) age_dum, by(raceb)
+	ren age_dum age_`i'
+	save `age_`i''
+	restore
+}
+
+use `age_0', clear
+forvalues i=1/9{
+	merge 1:1 raceb using `age_`i''
+	drop _merge
+}
+label var age_0 "22-25"
+label var age_1 "26-29"
+label var age_2 "30-33"
+label var age_3 "34-37"
+label var age_4 "38-41"
+label var age_5 "42-45"
+label var age_6 "46-49"
+label var age_7 "50-53"
+label var age_8 "54-57"
+label var age_9 "58-59"
+local a JK
+cd "${path_`a'}\output"
+listtab using "age_by_race.tex", rstyle(tabular) replace
+local a JK
+cd "${path_`a'}\data"
+use "usoc_clean.dta", clear
+
+*creating a second table with different aggregation
+forvalues i=0/3{
+    preserve
+	tempfile age_`i'
+	keep if age_dum_1 == `i'
+	collapse (count) age_dum_1, by(raceb)
+	ren age_dum_1 age_`i'
+	save `age_`i''
+	restore
+}
+
+use `age_0', clear
+forvalues i=1/3{
+	merge 1:1 raceb using `age_`i''
+	drop _merge
+}
+label var age_0 "22-29"
+label var age_1 "30-39"
+label var age_2 "40-49"
+label var age_3 "50-59"
+local a JK
+cd "${path_`a'}\output"
+listtab using "age_by_race_1.tex", rstyle(tabular) replace
+local a JK
+cd "${path_`a'}\data"
+use "usoc_clean.dta", clear
+
+
+
 *2----------------- PUBLIC VS PRIVATE SECTOR [public = 1 if in public sector]----------------
 
 preserve
