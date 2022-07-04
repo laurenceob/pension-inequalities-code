@@ -187,6 +187,68 @@ label var fx10 "Other"
 line fx1 fx2 fx3 fx4 fx5 fx6 fx7 fx8 fx9 fx10 x, sort ytitle(Density)
 graph export "dens_age_race.pdf", replace
 
+*Creating a table of age by race
+forvalues i=0/9{
+    preserve
+	tempfile age_`i'
+	keep if age_dum == `i'
+	collapse (count) age_dum, by(raceb)
+	ren age_dum age_`i'
+	save `age_`i''
+	restore
+}
+
+use `age_0', clear
+forvalues i=1/9{
+	merge 1:1 raceb using `age_`i''
+	drop _merge
+}
+label var age_0 "22-25"
+label var age_1 "26-29"
+label var age_2 "30-33"
+label var age_3 "34-37"
+label var age_4 "38-41"
+label var age_5 "42-45"
+label var age_6 "46-49"
+label var age_7 "50-53"
+label var age_8 "54-57"
+label var age_9 "58-59"
+local a JK
+cd "${path_`a'}\output"
+listtab using "age_by_race.tex", rstyle(tabular) replace
+local a JK
+cd "${path_`a'}\data"
+use "usoc_clean.dta", clear
+
+*creating a second table with different aggregation
+forvalues i=0/3{
+    preserve
+	tempfile age_`i'
+	keep if age_dum_1 == `i'
+	collapse (count) age_dum_1, by(raceb)
+	ren age_dum_1 age_`i'
+	save `age_`i''
+	restore
+}
+
+use `age_0', clear
+forvalues i=1/3{
+	merge 1:1 raceb using `age_`i''
+	drop _merge
+}
+label var age_0 "22-29"
+label var age_1 "30-39"
+label var age_2 "40-49"
+label var age_3 "50-59"
+local a JK
+cd "${path_`a'}\output"
+listtab using "age_by_race_1.tex", rstyle(tabular) replace
+local a JK
+cd "${path_`a'}\data"
+use "usoc_clean.dta", clear
+
+
+
 *2----------------- PUBLIC VS PRIVATE SECTOR [public = 1 if in public sector]----------------
 
 preserve
@@ -366,14 +428,20 @@ program define oaxaca_decom
 
 *using two way decomp - pooled is suggested
 
-***********************************AGE*****************************************
 
+
+**************************************EDIT*************************************
 *------------------------HEALTH-------------------------------------------------
 foreach x in ownperc ownperc_cond pen_mem {
-	eststo: oaxaca `x' age [pw=rxwgt] if inrange(health,1,2), by(health) pooled detail
-	esttab using `x'_oax_health.tex, replace label 
+	
+	eststo: oaxaca `x' age [pw=rxwgt] if inrange(health,1,2), by(health) pooled  
+	eststo: oaxaca `x' age lnearn [pw=rxwgt] if inrange(health,1,2), by(health) pooled
+	eststo: oaxaca `x' age lnearn numkids [pw=rxwgt] if inrange(health,1,2), by(health) pooled
+	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained" explained:age "Age" explained:lnearn "ln(earnings)" explained:numkids "Num. Kids") drop(unexplained:age unexplained:lnearn  unexplained:numkids unexplained:_cons) addnotes("Models weighted by cross-sectional respondent weight")
 	eststo clear
 }
+
+
 
 *-----------------------EDUCATION-----------------------------------------------
 
@@ -387,4 +455,116 @@ foreach x in ownperc ownperc_cond pen_mem {
 
 
 end
+*---------------------------------INCOME TRENDS---------------------------------
+capture program drop income_trends
+program define income_trends
+*jb1earn - Usual weekly gross earnings in main job
+*generating log earnings
+gen lnearn = ln(jb1earn)
+gen lnwage = ln(jb1wage)
 
+local a JK
+cd "${path_`a'}\output"
+
+gen earn_dum = .
+replace earn_dum = 1 if inrange(jb1earn, 0,500)
+replace earn_dum = 2 if jb1earn > 500 & jb1earn <= 1000
+replace earn_dum = 3 if jb1earn >1000
+label define earn_dum 1 "0-500" 2 "500-1000" 3 "1000+" 
+
+preserve
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(earn_dum health)
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' earn_dum if health == 1, ytitle("`ytitle'") xlabel( 1 "0-500" 2 "500-1000" 3 "1000+", angle(45)) xtitle("Weekly Earnings (£)") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected `x' earn_dum if health == 2
+	graph export "`x'_inc_health.pdf", replace
+}
+restore
+
+*Find that those with a health condition are more likely to be in a pension and have higher contribution rates at every earnings category -- why?
+
+*checking distribution of income by health status
+kdensity lnearn, nograph gen(c fc)
+forvalues i=1/2{
+	kdensity lnearn if health == `i', nograph gen(fc`i') at(c)
+}
+label var fc1 "Health Condition"
+label var fc2 "No Health Condition"
+line fc1 fc2 c, sort ytitle(Density)
+graph export "dens_inc_health.pdf", replace
+
+kdensity lnwage, nograph gen(d fd)
+forvalues i=1/2{
+	kdensity lnwage if health == `i', nograph gen(fd`i') at(d)
+}
+label var fd1 "Health Condition"
+label var fd2 "No Health Condition"
+line fd1 fd2 d, sort ytitle(Density)
+graph export "dens_inc_health_1.pdf", replace
+
+
+end
+
+*--------------------------------REGRESSION OUTPUT------------------------------
+capture program drop regression_output
+program define regression_output
+
+**********REGION**********************************
+foreach x in ownperc ownperc_cond pen_mem {
+	
+	if "`x'" == "pen_mem" local title "Pension Membership"
+	if "`x'" == "ownperc" local title "Unconditional Contribution Rate"
+	else if "`x'" == "ownperc_cond" local title "Conditional Contribution Rate"
+	
+	eststo: reg `x' i.region [pw=rxwgt] 
+	estadd local cont_1 "No"
+	estadd local cont_2 "No"
+	eststo: reg `x' i.region age lnearn i.intyear [pw=rxwgt]
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "No"
+	eststo: reg `x' i.region age lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.public i.married i.econstat [pw=rxwgt] if health > 0
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	esttab using `x'_reg_region.tex, se replace booktabs keep(*.region) drop(1.region) nomtitles label stat(cont_1 cont_2 N, label("Controls 1" "Controls 2" "Observations"))
+	eststo clear
+}
+*addnotes("Models weighted by cross-sectional respondent weight. North East is the base region. The basic set of controls control for age and earnings. The complete set of controls control for age, earnings, education, year, race, sex, health status, number of kids, sector, marital status, and if self-employed.")
+
+***********************RACE*********************************
+foreach x in ownperc ownperc_cond pen_mem {
+	
+	eststo: reg `x' i.raceb [pw=rxwgt] 
+	estadd local cont_1 "No"
+	estadd local cont_2 "No"
+	eststo: reg `x' i.raceb age lnearn i.intyear [pw=rxwgt]
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "No"
+	eststo: reg `x' i.region age lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.public i.married i.econstat [pw=rxwgt] if health > 0
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	esttab using `x'_reg_race.tex, se replace booktabs keep(*.raceb) drop(1.raceb) nomtitles label stat(cont_1 cont_2 N, label("Controls 1" "Controls 2" "Observations"))
+	eststo clear
+}
+
+******************EDUCATION************************************
+foreach x in ownperc ownperc_cond pen_mem {
+	
+	eststo: reg `x' i.edgrpnew [pw=rxwgt] 
+	estadd local cont_1 "No"
+	estadd local cont_2 "No"
+	eststo: reg `x' i.edgrpnew age lnearn i.intyear [pw=rxwgt]
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "No"
+	eststo: reg `x' i.region age lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.public i.married i.econstat [pw=rxwgt] if health > 0
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	esttab using `x'_reg_edu.tex, se replace booktabs keep(*.edgrpnew) drop(0.edgrpnew) nomtitles label stat(cont_1 cont_2 N, label("Controls 1" "Controls 2" "Observations"))
+	eststo clear
+}
+
+
+end
