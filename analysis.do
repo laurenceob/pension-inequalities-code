@@ -52,6 +52,7 @@ replace age_dum_1 = 3 if inrange(age,50,59)
 label define age_dumx 0 "22-29" 1 "30-39" 2 "40-49" 3 "50-59" 
 label values age_dum_1 age_dumx
 
+gen agesq = age^2
 end
 
 *--------------------------------SUMMARY STATS----------------------------------
@@ -435,9 +436,9 @@ program define oaxaca_decom
 foreach x in ownperc ownperc_cond pen_mem {
 	
 	eststo: oaxaca `x' age [pw=rxwgt] if inrange(health,1,2), by(health) pooled  
-	eststo: oaxaca `x' age lnearn [pw=rxwgt] if inrange(health,1,2), by(health) pooled
-	eststo: oaxaca `x' age lnearn numkids [pw=rxwgt] if inrange(health,1,2), by(health) pooled
-	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained" explained:age "Age" explained:lnearn "ln(earnings)" explained:numkids "Num. Kids") drop(unexplained:age unexplained:lnearn  unexplained:numkids unexplained:_cons) addnotes("Models weighted by cross-sectional respondent weight")
+	eststo: oaxaca `x' age agesq lnearn [pw=rxwgt] if inrange(health,1,2), by(health) pooled
+	eststo: oaxaca `x' age agesq lnearn numkids [pw=rxwgt] if inrange(health,1,2), by(health) pooled
+	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained" explained:age "Age" explained:lnearn "ln(earnings)" explained:numkids "Num. Kids" explained:agesq "Age Sq") drop(unexplained:age unexplained:lnearn unexplained:agesq unexplained:numkids unexplained:_cons) addnotes("Models weighted by cross-sectional respondent weight")
 	eststo clear
 }
 
@@ -516,23 +517,19 @@ program define regression_output
 **********REGION**********************************
 foreach x in ownperc ownperc_cond pen_mem {
 	
-	if "`x'" == "pen_mem" local title "Pension Membership"
-	if "`x'" == "ownperc" local title "Unconditional Contribution Rate"
-	else if "`x'" == "ownperc_cond" local title "Conditional Contribution Rate"
-	
 	eststo: reg `x' i.region [pw=rxwgt] 
 	estadd local cont_1 "No"
 	estadd local cont_2 "No"
-	eststo: reg `x' i.region age lnearn i.intyear [pw=rxwgt]
+	eststo: reg `x' i.region age agesq lnearn i.intyear [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
-	eststo: reg `x' i.region age lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.public i.married i.econstat [pw=rxwgt] if health > 0
+	eststo: reg `x' i.region age agesq lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.public i.married i.econstat [pw=rxwgt] if health > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	esttab using `x'_reg_region.tex, se replace booktabs keep(*.region) drop(1.region) nomtitles label stat(cont_1 cont_2 N, label("Controls 1" "Controls 2" "Observations"))
 	eststo clear
 }
-*addnotes("Models weighted by cross-sectional respondent weight. North East is the base region. The basic set of controls control for age and earnings. The complete set of controls control for age, earnings, education, year, race, sex, health status, number of kids, sector, marital status, and if self-employed.")
+*addnotes("Models weighted by cross-sectional respondent weight. North East is the base region. The basic set of controls control for age, age squared, time and earnings. The complete set of controls control for age, age squared, earnings, education, year, race, sex, health status, number of kids, sector, marital status, and if self-employed.")
 
 ***********************RACE*********************************
 foreach x in ownperc ownperc_cond pen_mem {
@@ -540,10 +537,10 @@ foreach x in ownperc ownperc_cond pen_mem {
 	eststo: reg `x' i.raceb [pw=rxwgt] 
 	estadd local cont_1 "No"
 	estadd local cont_2 "No"
-	eststo: reg `x' i.raceb age lnearn i.intyear [pw=rxwgt]
+	eststo: reg `x' i.raceb age agesq lnearn i.intyear [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
-	eststo: reg `x' i.region age lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.public i.married i.econstat [pw=rxwgt] if health > 0
+	eststo: reg `x' i.region age agesq lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.public i.married i.econstat [pw=rxwgt] if health > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	esttab using `x'_reg_race.tex, se replace booktabs keep(*.raceb) drop(1.raceb) nomtitles label stat(cont_1 cont_2 N, label("Controls 1" "Controls 2" "Observations"))
@@ -556,10 +553,10 @@ foreach x in ownperc ownperc_cond pen_mem {
 	eststo: reg `x' i.edgrpnew [pw=rxwgt] 
 	estadd local cont_1 "No"
 	estadd local cont_2 "No"
-	eststo: reg `x' i.edgrpnew age lnearn i.intyear [pw=rxwgt]
+	eststo: reg `x' i.edgrpnew age agesq lnearn i.intyear [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
-	eststo: reg `x' i.region age lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.public i.married i.econstat [pw=rxwgt] if health > 0
+	eststo: reg `x' i.region age agesq lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.public i.married i.econstat [pw=rxwgt] if health > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	esttab using `x'_reg_edu.tex, se replace booktabs keep(*.edgrpnew) drop(0.edgrpnew) nomtitles label stat(cont_1 cont_2 N, label("Controls 1" "Controls 2" "Observations"))
