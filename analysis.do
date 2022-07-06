@@ -101,6 +101,12 @@ replace industry = 21 if jbsic07_cc == 99
 label define ind 1 "Agriculture, Forestry and Fishing" 2 "Mining and Quarrying" 3 "Manufacturing" 4 "Electricity, gas, steam and air conditioning supply" 5 "Water supply, sewerage, waste management and remediation activities" 6 "Construction" 7 "Wholesale and retail trade; repair of motor vehicles and motorcycles" 8 "Transportation and storage" 9 "Accommodation and food service activities" 10 "Information and communication" 11 "Financial and insurance activities" 12 "Real estate activities" 13 "Professional, scientific and technical activities" 14 "Administrative and support service activities" 15 "Public administration and defence; compulsory social security" 16 "Education" 17 "Human health and social work activities" 18 "Arts, entertainment and recreation" 19 "Other service activities" 20 "Activities of households as employers; undifferentiated goods and services producing activities of households for own use" 21 "Activities of extraterritorial organisations and bodies"
 label values industry ind
 
+gen earn_dum = .
+replace earn_dum = 1 if inrange(jb1earn, 0,500)
+replace earn_dum = 2 if jb1earn > 500 & jb1earn <= 1000
+replace earn_dum = 3 if jb1earn >1000
+label define earn_dum 1 "0-500" 2 "500-1000" 3 "1000+" 
+
 end
 
 *--------------------------------SUMMARY STATS----------------------------------
@@ -120,10 +126,54 @@ foreach x in ownperc ownperc_cond pen_mem {
 	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
 
 	graph bar `x', over(raceb, label(angle(45))) ytitle("`ytitle'")
-	graph export "`x'.pdf", replace
+	graph export "`x'_race.pdf", replace
 }
 restore
 
+*graphs of pension membership/contributions by region
+preserve
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(region)
+format pen_mem ownperc ownperc_cond %3.2f 
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+
+	graph bar `x', over(region, label(angle(45))) ytitle("`ytitle'")
+	graph export "`x'_region.pdf", replace
+}
+restore
+
+*graphs of pension membership/contributions by health status
+preserve
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(health)
+format pen_mem ownperc ownperc_cond %3.2f 
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+
+	graph bar `x' if health >0, over(health, label(angle(45))) ytitle("`ytitle'") 
+	graph export "`x'_health.pdf", replace
+}
+restore
+
+*graphs of pension membership/contributions by education
+preserve
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(edgrpnew)
+format pen_mem ownperc ownperc_cond %3.2f 
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+
+	graph bar `x', over(edgrpnew, descending label(angle(45))) ytitle("`ytitle'") 
+	graph export "`x'_edu.pdf", replace
+}
+restore
 
 *table output of summary statistics by region, education [edgrpnew](highest qualification), health (long standing illness or disability)
 foreach i in region health edgrpnew raceb{
@@ -369,6 +419,20 @@ label var fa12 "Northern Ireland"
 line fa1 fa2 fa3 fa4 fa5 fa6 fa7 fa8 fa9 fa10 fa11 fa12 a, sort ytitle(Density)
 graph export "dens_age_region.pdf", replace
 
+preserve
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(age_dum_1 region)
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' age_dum_1 if region == 1, ytitle("`ytitle'") xlabel(0 "22-29" 1 "30-39" 2 "40-49" 3 "50-59") xtitle("Age Group") legend(lab(1 "North East") lab(2 "North West and Merseyside") lab(3 "Yorks and Humberside") lab(4 "East Midlands") lab(5 "West Midlands") lab(6 "Eastern") lab(7 "London") lab(8 "South East") lab(9 "South West") lab(10 "Wales") lab(11 "Scotland") lab(12 "Northern Ireland")) || connected `x' age_dum_1 if region == 2 || connected `x' age_dum_1 if region == 3 || connected `x' age_dum_1 if region == 4 || connected `x' age_dum_1 if region == 5 || connected `x' age_dum_1 if region == 6 || connected `x' age_dum_1 if region == 7 || connected `x' age_dum_1 if region == 8 || connected `x' age_dum_1 if region == 9 || connected `x' age_dum_1 if region == 10 || connected `x' age_dum_1 if region == 11 || connected `x' age_dum_1 if region == 12 
+	graph export "`x'_age_region.pdf", replace
+}
+restore
+
+
 *-----------------------------EDUCATION-----------------------------------------
 kdensity age, nograph gen(b fb)
 forvalues i=0/5{
@@ -391,7 +455,7 @@ foreach x in ownperc ownperc_cond pen_mem {
 	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
 	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
 	
-	twoway connected `x' age_dum_1 if edgrpnew == 0, ytitle("`ytitle'") xlabel(0 "22-29" 1 "30-39" 2 "40-49" 3 "50-59", angle(45)) xtitle("Age Group") legend(lab(1 "None of the above") lab(2 "Less than GCSEs") lab(3 "GCSEs") lab(4 "A-levels") lab(5 "Vocational higher") lab(6 "University")) || connected `x' age_dum_1 if edgrpnew == 1 || connected `x' age_dum_1 if edgrpnew == 2 || connected `x' age_dum_1 if edgrpnew == 3 || connected `x' age_dum_1 if edgrpnew == 4 || connected `x' age_dum_1 if edgrpnew == 5    
+	twoway connected `x' age_dum_1 if edgrpnew == 0, ytitle("`ytitle'") xlabel(0 "22-29" 1 "30-39" 2 "40-49" 3 "50-59") xtitle("Age Group") legend(lab(1 "None of the above") lab(2 "Less than GCSEs") lab(3 "GCSEs") lab(4 "A-levels") lab(5 "Vocational higher") lab(6 "University")) || connected `x' age_dum_1 if edgrpnew == 1 || connected `x' age_dum_1 if edgrpnew == 2 || connected `x' age_dum_1 if edgrpnew == 3 || connected `x' age_dum_1 if edgrpnew == 4 || connected `x' age_dum_1 if edgrpnew == 5    
 	graph export "`x'_age_edu.pdf", replace
 }
 restore
@@ -471,40 +535,6 @@ restore
 
 end
 
-*------------------------------OAXACA DECOMPOSITION-----------------------------
-capture program drop oaxaca_decom
-program define oaxaca_decom
-
-*using two way decomp - pooled is suggested
-
-local a JK
-cd "${path_`a'}\output"
-
-**************************************EDIT*************************************
-*------------------------HEALTH-------------------------------------------------
-foreach x in ownperc ownperc_cond pen_mem {
-	
-	eststo: oaxaca `x' age [pw=rxwgt] if inrange(health,1,2), by(health) pooled  
-	eststo: oaxaca `x' age agesq lnearn [pw=rxwgt] if inrange(health,1,2), by(health) pooled
-	eststo: oaxaca `x' age agesq lnearn numkids [pw=rxwgt] if inrange(health,1,2), by(health) pooled
-	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained" explained:age "Age" explained:lnearn "ln(earnings)" explained:numkids "Num. Kids" explained:agesq "Age Sq") drop(unexplained:age unexplained:lnearn unexplained:agesq unexplained:numkids unexplained:_cons) addnotes("Models weighted by cross-sectional respondent weight")
-	eststo clear
-}
-
-
-
-*-----------------------EDUCATION-----------------------------------------------
-
-foreach x in ownperc ownperc_cond pen_mem {
-	forvalues i=1/4{
-		eststo: oaxaca `x' age [pw=rxwgt] if inlist(edgrpnew,`i',5), swap by(edgrpnew) pooled detail 
-		esttab using `x'_`i'_oax_edu.tex, replace label
-		eststo clear
-	}
-}
-
-
-end
 *---------------------------------INCOME TRENDS---------------------------------
 capture program drop income_trends
 program define income_trends
@@ -518,6 +548,7 @@ replace earn_dum = 2 if jb1earn > 500 & jb1earn <= 1000
 replace earn_dum = 3 if jb1earn >1000
 label define earn_dum 1 "0-500" 2 "500-1000" 3 "1000+" 
 
+**************************HEALTH******************************************
 preserve
 collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(earn_dum health)
 foreach x in ownperc ownperc_cond pen_mem {
@@ -526,7 +557,7 @@ foreach x in ownperc ownperc_cond pen_mem {
 	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
 	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
 	
-	twoway connected `x' earn_dum if health == 1, ytitle("`ytitle'") xlabel( 1 "0-500" 2 "500-1000" 3 "1000+", angle(45)) xtitle("Weekly Earnings (£)") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected `x' earn_dum if health == 2
+	twoway connected `x' earn_dum if health == 1, ytitle("`ytitle'") xlabel( 1 "0-500" 2 "500-1000" 3 "1000+") xtitle("Weekly Earnings (£)") legend(lab(1 "Health Condition") lab(2 "No Health Condition")) || connected `x' earn_dum if health == 2
 	graph export "`x'_inc_health.pdf", replace
 }
 restore
@@ -552,6 +583,91 @@ label var fd2 "No Health Condition"
 line fd1 fd2 d, sort ytitle(Density)
 graph export "dens_inc_health_1.pdf", replace
 
+****************************RACE**********************************************
+preserve
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(earn_dum raceb)
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' earn_dum if raceb == 1, ytitle("`ytitle'") xlabel( 1 "0-500" 2 "500-1000" 3 "1000+") xtitle("Weekly Earnings (£)") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Caribbean") lab(7 "African")) || connected `x' earn_dum if raceb == 2 || connected `x' earn_dum if raceb == 3 || connected `x' earn_dum if raceb == 4 || connected `x' earn_dum if raceb == 5 || connected `x' earn_dum if raceb == 7 || connected `x' earn_dum if raceb == 8 
+	graph export "`x'_inc_race.pdf", replace
+}
+restore
+
+
+**************************EDUCATION***********************************************
+preserve
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(earn_dum edgrpnew)
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' earn_dum if edgrpnew == 0, ytitle("`ytitle'") xlabel( 1 "0-500" 2 "500-1000" 3 "1000+") xtitle("Weekly Earnings (£)") legend(lab(1 "None of the above") lab(2 "Less than GCSEs") lab(3 "GCSEs") lab(4 "A-levels") lab(5 "Vocational higher") lab(6 "University")) || connected `x' earn_dum if edgrpnew == 1 || connected `x' earn_dum if edgrpnew == 2 || connected `x' earn_dum if edgrpnew == 3 || connected `x' earn_dum if edgrpnew == 4 || connected `x' earn_dum if edgrpnew == 5   
+	graph export "`x'_inc_edu.pdf", replace
+}
+restore
+
+*********************REGION****************************************************
+preserve
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(earn_dum region)
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' earn_dum if region == 1, ytitle("`ytitle'") xlabel( 1 "0-500" 2 "500-1000" 3 "1000+") xtitle("Weekly Earnings (£)") legend(lab(1 "North East") lab(2 "North West and Merseyside") lab(3 "Yorks and Humberside") lab(4 "East Midlands") lab(5 "West Midlands") lab(6 "Eastern") lab(7 "London") lab(8 "South East") lab(9 "South West") lab(10 "Wales") lab(11 "Scotland") lab(12 "Northern Ireland")) || connected `x' earn_dum if region == 2 || connected `x' earn_dum if region == 3 || connected `x' earn_dum if region == 4 || connected `x' earn_dum if region == 5 || connected `x' earn_dum if region == 6 || connected `x' earn_dum if region == 7 || connected `x' earn_dum if region == 8 || connected `x' earn_dum if region == 9 || connected `x' earn_dum if region == 10 || connected `x' earn_dum if region == 11 || connected `x' earn_dum if region == 12 
+	graph export "`x'_inc_region.pdf", replace
+}
+restore
+
+
+end
+
+*------------------------------OAXACA DECOMPOSITION-----------------------------
+capture program drop oaxaca_decom
+program define oaxaca_decom
+
+*using two way decomp - pooled is suggested
+
+local a JK
+cd "${path_`a'}\output"
+
+**************************************EDIT*************************************
+*------------------------HEALTH-------------------------------------------------
+foreach x in ownperc ownperc_cond pen_mem {
+	
+	eststo: oaxaca `x' age [pw=rxwgt] if inrange(health,1,2), by(health) pooled  // age
+	
+	eststo: oaxaca `x' age agesq lnearn intyear[pw=rxwgt] if inrange(health,1,2), by(health) pooled //+ agesq, earnings, year
+	
+	eststo: oaxaca `x' age agesq lnearn edgrpnew region raceb intyear female [pw=rxwgt] if inrange(health,1,2), by(health) pooled //+ education, region, race, sex
+	
+	eststo: oaxaca `x' region age agesq lnearn edgrpnew raceb intyear female numkids married sector jbsize [pw=rxwgt] if inrange(health,1,2), by(health) pooled //+ numkids, married, sector, job size
+	
+	eststo: oaxaca `x' region age agesq lnearn edgrpnew raceb intyear female numkids married sector jbsize industry occupation [pw=rxwgt] if inrange(health,1,2), by(health) pooled //+ industry, occupation
+	
+	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained") drop(unexplained:age unexplained:lnearn unexplained:agesq unexplained:numkids unexplained:region unexplained:edgrpnew unexplained:raceb unexplained:intyear unexplained:female unexplained:married unexplained:sector unexplained:jbsize unexplained:industry unexplained:occupation unexplained:_cons explained:age explained:lnearn explained:agesq explained:numkids explained:region explained:edgrpnew explained:raceb explained:intyear explained:female explained:married explained:sector explained:jbsize explained:industry explained:occupation)
+	eststo clear
+}
+
+
+
+*-----------------------EDUCATION-----------------------------------------------
+/*
+foreach x in ownperc ownperc_cond pen_mem {
+	forvalues i=1/4{
+		eststo: oaxaca `x' age [pw=rxwgt] if inlist(edgrpnew,`i',5), swap by(edgrpnew) pooled detail 
+		esttab using `x'_`i'_oax_edu.tex, replace label
+		eststo clear
+	}
+}
+*/
 
 end
 
@@ -627,34 +743,35 @@ foreach x in ownperc ownperc_cond pen_mem {
 }
 
 ******************EDUCATION************************************
+*university degree is base 
 foreach x in ownperc ownperc_cond pen_mem {
 	
-	eststo: reg `x' i.edgrpnew [pw=rxwgt] if health > 0 & jbsize > 0
+	eststo: reg `x' ib5.edgrpnew [pw=rxwgt] if health > 0 & jbsize > 0
 	estadd local cont_1 "No"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.edgrpnew age agesq lnearn i.intyear [pw=rxwgt] if health > 0 & jbsize > 0
+	eststo: reg `x' ib5.edgrpnew age agesq lnearn i.intyear [pw=rxwgt] if health > 0 & jbsize > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.edgrpnew age agesq lnearn i.region i.raceb i.intyear i.female [pw=rxwgt] if health > 0
+	eststo: reg `x' ib5.edgrpnew age agesq lnearn i.region i.raceb i.intyear i.female [pw=rxwgt] if health > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize [pw=rxwgt] if health > 0 & jbsize > 0 
+	eststo: reg `x' i.region age agesq lnearn ib5.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize [pw=rxwgt] if health > 0 & jbsize > 0 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize i.industry i.occupation [pw=rxwgt] if health > 0 & jbsize > 0 
+	eststo: reg `x' i.region age agesq lnearn ib5.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize i.industry i.occupation [pw=rxwgt] if health > 0 & jbsize > 0 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
-	esttab using `x'_reg_edu.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.edgrpnew) drop(0.edgrpnew) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 N, label("Controls 1" "Controls 2" "Controls 3"  "Controls 4" "Observations"))
+	esttab using `x'_reg_edu.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.edgrpnew) drop(5.edgrpnew) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 N, label("Controls 1" "Controls 2" "Controls 3"  "Controls 4" "Observations"))
 	eststo clear
 }
 
@@ -689,13 +806,5 @@ foreach x in ownperc ownperc_cond pen_mem {
 	esttab using `x'_reg_health.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.health) drop(1.health) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 N, label("Controls 1" "Controls 2" "Controls 3"  "Controls 4" "Observations"))
 	eststo clear
 }
-
-
-
-
-
-
-
-
 
 end
