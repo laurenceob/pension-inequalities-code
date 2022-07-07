@@ -22,90 +22,16 @@ ssc install oaxaca //oaxaca decomposition
 global path_JK "P:\JPI_PENSINEQ\Inequalities\Summer_student\analysis" 
 local a JK
 cd "${path_`a'}\data"
-use "usoc_clean.dta", clear 
 
+*inflation data - for generating real earnings
+import excel "inflation.xls", sheet("data") cellrange(A9:B42) clear
+
+
+use "usoc_clean.dta", clear 
 
 ***********************IMPORTANT****************************************
 keep if inlist(jb1status, 1, 2)  //drops those who are unemployed; 29,411 dropped
-gen pen_mem = 100*jbpenm // so that pension membership is /100
 ************************************************************************
-
-*creating age dummy 
-gen age_dum = 0 if inrange(age,22,25)
-replace age_dum = 1 if inrange(age,26,29)
-replace age_dum = 2 if inrange(age,30,33)
-replace age_dum = 3 if inrange(age,34,37)
-replace age_dum = 4 if inrange(age,38,41)
-replace age_dum = 5 if inrange(age,42,45)
-replace age_dum = 6 if inrange(age,46,49)
-replace age_dum = 7 if inrange(age,50,53)
-replace age_dum = 8 if inrange(age,54,57)
-replace age_dum = 9 if inrange(age,58,59)
-label define age_dum1 0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59"
-label values age_dum age_dum1
-
-*creating age dummy 1
-gen age_dum_1 = 0 if inrange(age,22,29)
-replace age_dum_1 = 1 if inrange(age,30,39)
-replace age_dum_1 = 2 if inrange(age,40,49)
-replace age_dum_1 = 3 if inrange(age,50,59)
-label define age_dumx 0 "22-29" 1 "30-39" 2 "40-49" 3 "50-59" 
-label values age_dum_1 age_dumx
-
-gen agesq = age^2
-
-*jb1earn - Usual weekly gross earnings in main job
-*generating log earnings
-gen lnearn = ln(jb1earn)
-gen lnwage = ln(jb1wage)
-
-gen sector =.
-replace sector = 0 if jb1status == 2
-replace sector = 1 if public == 0 & jb1status == 1
-replace sector = 2 if public == 1 & jb1status == 1
-label define sect 0 "Self-employed" 1 "Private" 2 "Public"
-label values sector sect
-
-*putting jobsize of 1 if self-employed
-replace jbsize = 1 if jbsize == -8 & jb1status == 2
-
-gen occupation = .
-forvalues i = 1/9{
-	replace occupation = `i' if inrange(jbsoc00_cc,`i'00,`i'99)
-}
-label define occ 1 "Managers and senior officials" 2 "Professional occupations" 3 "Associate professional and technical occupations" 4 "Administrative and secretarial occupations" 5 "Skilled trades occupations" 6 "Personal service occupations" 7 "Sales and customer service occupations" 8 "Process, plant and machine operatives" 9 "Elementary occupations"
-label values occupation occ 
-
-gen industry = . 
-replace industry = 1 if inrange(jbsic07_cc,1,3)
-replace industry = 2 if inrange(jbsic07_cc,4,9)
-replace industry = 3 if inrange(jbsic07_cc,10,32)
-replace industry = 4 if inrange(jbsic07_cc,33,35)
-replace industry = 5 if inrange(jbsic07_cc,36,39)
-replace industry = 6 if inrange(jbsic07_cc,40,43)
-replace industry = 7 if inrange(jbsic07_cc,45,47)
-replace industry = 8 if inrange(jbsic07_cc,49,53)
-replace industry = 9 if inrange(jbsic07_cc,55,56)
-replace industry = 10 if inrange(jbsic07_cc,58,63)
-replace industry = 11 if inrange(jbsic07_cc,64,66)
-replace industry = 12 if jbsic07_cc == 68
-replace industry = 13 if inrange(jbsic07_cc,69,75)
-replace industry = 14 if inrange(jbsic07_cc,77,79)
-replace industry = 15 if inrange(jbsic07_cc,80,84)
-replace industry = 16 if jbsic07_cc == 85
-replace industry = 17 if inrange(jbsic07_cc,86,88)
-replace industry = 18 if inrange(jbsic07_cc,90,93)
-replace industry = 19 if inrange(jbsic07_cc,94,96)
-replace industry = 20 if inrange(jbsic07_cc,97,98)
-replace industry = 21 if jbsic07_cc == 99
-label define ind 1 "Agriculture, Forestry and Fishing" 2 "Mining and Quarrying" 3 "Manufacturing" 4 "Electricity, gas, steam and air conditioning supply" 5 "Water supply, sewerage, waste management and remediation activities" 6 "Construction" 7 "Wholesale and retail trade; repair of motor vehicles and motorcycles" 8 "Transportation and storage" 9 "Accommodation and food service activities" 10 "Information and communication" 11 "Financial and insurance activities" 12 "Real estate activities" 13 "Professional, scientific and technical activities" 14 "Administrative and support service activities" 15 "Public administration and defence; compulsory social security" 16 "Education" 17 "Human health and social work activities" 18 "Arts, entertainment and recreation" 19 "Other service activities" 20 "Activities of households as employers; undifferentiated goods and services producing activities of households for own use" 21 "Activities of extraterritorial organisations and bodies"
-label values industry ind
-
-gen earn_dum = .
-replace earn_dum = 1 if inrange(jb1earn, 0,500)
-replace earn_dum = 2 if jb1earn > 500 & jb1earn <= 1000
-replace earn_dum = 3 if jb1earn >1000
-label define earn_dum 1 "0-500" 2 "500-1000" 3 "1000+" 
 
 end
 
@@ -270,7 +196,7 @@ esttab using dist_age_race.tex, replace cell("count mean sd") noobs nonumber
 eststo clear
 
 kdensity age, nograph gen(x fx)
-forvalues i=1/10{
+forvalues i=1/9{
 	kdensity age if raceb == `i', nograph gen(fx`i') at(x)
 }
 label var fx1 "White"
@@ -281,9 +207,8 @@ label var fx5 "Bangladeshi"
 label var fx6 "Other Asian"
 label var fx7 "Caribbean"
 label var fx8 "African"
-label var fx9 "Other Black"
-label var fx10 "Other"
-line fx1 fx2 fx3 fx4 fx5 fx6 fx7 fx8 fx9 fx10 x, sort ytitle(Density)
+label var fx9 "Other"
+line fx1 fx2 fx3 fx4 fx5 fx6 fx7 fx8 fx9 x, sort ytitle(Density)
 graph export "dens_age_race.pdf", replace
 
 *Creating a table of age by race
@@ -574,15 +499,6 @@ label var fc2 "No Health Condition"
 line fc1 fc2 c, sort ytitle(Density)
 graph export "dens_inc_health.pdf", replace
 
-kdensity lnwage, nograph gen(d fd)
-forvalues i=1/2{
-	kdensity lnwage if health == `i', nograph gen(fd`i') at(d)
-}
-label var fd1 "Health Condition"
-label var fd2 "No Health Condition"
-line fd1 fd2 d, sort ytitle(Density)
-graph export "dens_inc_health_1.pdf", replace
-
 ****************************RACE**********************************************
 preserve
 collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(earn_dum raceb)
@@ -638,7 +554,6 @@ program define oaxaca_decom
 local a JK
 cd "${path_`a'}\output"
 
-**************************************EDIT*************************************
 *------------------------HEALTH-------------------------------------------------
 foreach x in ownperc ownperc_cond pen_mem {
 	
@@ -648,11 +563,11 @@ foreach x in ownperc ownperc_cond pen_mem {
 	
 	eststo: oaxaca `x' age agesq lnearn edgrpnew region raceb intyear female [pw=rxwgt] if inrange(health,1,2), by(health) pooled //+ education, region, race, sex
 	
-	eststo: oaxaca `x' region age agesq lnearn edgrpnew raceb intyear female numkids married sector jbsize [pw=rxwgt] if inrange(health,1,2), by(health) pooled //+ numkids, married, sector, job size
+	eststo: oaxaca `x' region age agesq lnearn edgrpnew raceb intyear female kidnum married sector jbsize [pw=rxwgt] if inrange(health,1,2), by(health) pooled //+ numkids, married, sector, job size
 	
-	eststo: oaxaca `x' region age agesq lnearn edgrpnew raceb intyear female numkids married sector jbsize industry occupation [pw=rxwgt] if inrange(health,1,2), by(health) pooled //+ industry, occupation
+	eststo: oaxaca `x' region age agesq lnearn edgrpnew raceb intyear female kidnum married sector jbsize industry occupation [pw=rxwgt] if inrange(health,1,2), by(health) pooled //+ industry, occupation
 	
-	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained") drop(unexplained:age unexplained:lnearn unexplained:agesq unexplained:numkids unexplained:region unexplained:edgrpnew unexplained:raceb unexplained:intyear unexplained:female unexplained:married unexplained:sector unexplained:jbsize unexplained:industry unexplained:occupation unexplained:_cons explained:age explained:lnearn explained:agesq explained:numkids explained:region explained:edgrpnew explained:raceb explained:intyear explained:female explained:married explained:sector explained:jbsize explained:industry explained:occupation)
+	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained") drop(unexplained:age unexplained:lnearn unexplained:agesq unexplained:kidnum unexplained:region unexplained:edgrpnew unexplained:raceb unexplained:intyear unexplained:female unexplained:married unexplained:sector unexplained:jbsize unexplained:industry unexplained:occupation unexplained:_cons explained:age explained:lnearn explained:agesq explained:kidnum explained:region explained:edgrpnew explained:raceb explained:intyear explained:female explained:married explained:sector explained:jbsize explained:industry explained:occupation)
 	eststo clear
 }
 
@@ -678,6 +593,14 @@ program define regression_output
 local a JK
 cd "${path_`a'}\output"
 
+/*
+Controls 1: age, age^2, year
+Controls 2: earnings
+Controls 3: job variables
+Controls 4: other individual variables
+Controls 5: partner variables
+*/
+
 **********REGION**********************************
 foreach x in ownperc ownperc_cond pen_mem {
 	
@@ -686,27 +609,38 @@ foreach x in ownperc ownperc_cond pen_mem {
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn i.intyear [pw=rxwgt]  if health > 0 & jbsize > 0 // controlling for age (quadratic), earnings, year
+	estadd local cont_5 "No"
+	eststo: reg `x' i.region age agesq i.intyear [pw=rxwgt]  if health > 0 & jbsize > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn i.intyear i.raceb i.edgrpnew i.female [pw=rxwgt] if health > 0 & jbsize > 0 // controlling for "" plus race, education, sex
+	estadd local cont_5 "No"
+	eststo: reg `x' i.region age agesq i.intyear lnearn [pw=rxwgt] if health > 0 & jbsize > 0 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize [pw=rxwgt] if health > 0 & jbsize > 0 //controlling for "" plus health status, number of kids, if married, employer size
+	estadd local cont_5 "No"
+	eststo: reg `x' i.region age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation [pw=rxwgt] if health > 0 & jbsize > 0 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize i.industry i.occupation [pw=rxwgt] if health > 0 & jbsize > 0 //controlling for "" plus industry and occupation
+	estadd local cont_5 "No"
+	eststo: reg `x' i.region age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation i.edgrpnew i.raceb i.female i.health i.kidnum [pw=rxwgt] if health > 0 & jbsize > 0 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
-	esttab using `x'_reg_region.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.region) drop(1.region) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 N, label("Controls 1" "Controls 2" "Controls 3" " Controls 4" "Observations")) 
+	estadd local cont_5 "No"
+	eststo: reg `x' i.region age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation i.edgrpnew i.raceb i.female i.health i.kidnum i.married i.partner_edu lnpartearn i.partner_sector [pw=rxwgt] if health > 0 & jbsize > 0
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	esttab using `x'_reg_region.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.region) drop(1.region) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 N, label("Controls 1" "Controls 2" "Controls 3" " Controls 4" "Controls 5" "Observations")) 
 	eststo clear
 }
 
@@ -718,27 +652,38 @@ foreach x in ownperc ownperc_cond pen_mem {
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.raceb age agesq lnearn i.intyear [pw=rxwgt] if health > 0 & jbsize > 0
+	estadd local cont_5 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt] if health > 0 & jbsize > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.raceb age agesq lnearn i.edgrpnew i.region i.intyear i.female  [pw=rxwgt] if health > 0 & jbsize > 0
+	estadd local cont_5 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnearn [pw=rxwgt] if health > 0 & jbsize > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize [pw=rxwgt] if health > 0 & jbsize > 0 
+	estadd local cont_5 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation [pw=rxwgt] if health > 0 & jbsize > 0 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize i.industry i.occupation [pw=rxwgt] if health > 0 & jbsize > 0 
+	estadd local cont_5 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation i.edgrpnew i.region i.female i.health i.kidnum [pw=rxwgt] if health > 0 & jbsize > 0 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
-	esttab using `x'_reg_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Observations")) 
+	estadd local cont_5 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation i.edgrpnew i.region i.female i.health i.kidnum i.married i.partner_edu lnpartearn i.partner_sector [pw=rxwgt] if health > 0 & jbsize > 0 
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	esttab using `x'_reg_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Observations")) 
 	eststo clear
 }
 
@@ -751,27 +696,38 @@ foreach x in ownperc ownperc_cond pen_mem {
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' ib5.edgrpnew age agesq lnearn i.intyear [pw=rxwgt] if health > 0 & jbsize > 0
+	estadd local cont_5 "No"
+	eststo: reg `x' ib5.edgrpnew age agesq i.intyear [pw=rxwgt] if health > 0 & jbsize > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' ib5.edgrpnew age agesq lnearn i.region i.raceb i.intyear i.female [pw=rxwgt] if health > 0
+	estadd local cont_5 "No"
+	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnearn [pw=rxwgt] if health > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn ib5.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize [pw=rxwgt] if health > 0 & jbsize > 0 
+	estadd local cont_5 "No"
+	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation  [pw=rxwgt] if health > 0 & jbsize > 0 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn ib5.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize i.industry i.occupation [pw=rxwgt] if health > 0 & jbsize > 0 
+	estadd local cont_5 "No"
+	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation i.region i.female i.health i.kidnum i.raceb [pw=rxwgt] if health > 0 & jbsize > 0 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
-	esttab using `x'_reg_edu.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.edgrpnew) drop(5.edgrpnew) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 N, label("Controls 1" "Controls 2" "Controls 3"  "Controls 4" "Observations"))
+	estadd local cont_5 "No"
+	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation i.edgrpnew i.region i.female i.health i.kidnum i.raceb i.married i.partner_edu lnpartearn i.partner_sector [pw=rxwgt] if health > 0 & jbsize > 0 
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	esttab using `x'_reg_edu.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.edgrpnew) drop(5.edgrpnew) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 N, label("Controls 1" "Controls 2" "Controls 3"  "Controls 4" "Controls 5" "Observations"))
 	eststo clear
 }
 
@@ -783,27 +739,38 @@ foreach x in ownperc ownperc_cond pen_mem {
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.health age agesq lnearn i.intyear [pw=rxwgt] if health > 0 & jbsize > 0
+	estadd local cont_5 "No"
+	eststo: reg `x' i.health age agesq i.intyear [pw=rxwgt] if health > 0 & jbsize > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.health i.edgrpnew age agesq lnearn i.region i.raceb i.intyear i.female [pw=rxwgt] if health > 0
+	estadd local cont_5 "No"
+	eststo: reg `x' i.health age agesq i.intyear lnearn [pw=rxwgt] if health > 0 & jbsize > 0
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize [pw=rxwgt] if health > 0 & jbsize > 0 
+	estadd local cont_5 "No"
+	eststo: reg `x' i.health age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation [pw=rxwgt] if health > 0 & jbsize > 0 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
-	eststo: reg `x' i.region age agesq lnearn i.edgrpnew i.raceb i.intyear i.female i.health numkids i.married i.sector i.jbsize i.industry i.occupation [pw=rxwgt] if health > 0 & jbsize > 0 
+	estadd local cont_5 "No"
+	eststo: reg `x' i.health age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation i.edgrpnew i.region i.female i.kidnum i.raceb [pw=rxwgt] if health > 0 & jbsize > 0 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
-	esttab using `x'_reg_health.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.health) drop(1.health) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 N, label("Controls 1" "Controls 2" "Controls 3"  "Controls 4" "Observations"))
+	estadd local cont_5 "No"
+	eststo: reg `x' i.health age agesq i.intyear lnearn i.sector i.jbsize i.industry i.occupation i.edgrpnew i.region i.female i.kidnum i.raceb i.married i.partner_edu lnpartearn i.partner_sector [pw=rxwgt] if health > 0 & jbsize > 0 
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	esttab using `x'_reg_health.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.health) drop(1.health) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 N, label("Controls 1" "Controls 2" "Controls 3"  "Controls 4" "Controls 5" "Observations"))
 	eststo clear
 }
 
