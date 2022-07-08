@@ -62,8 +62,10 @@ program define clean_ff_vars
 
 	/* Append the BHPS and USOC and sort out all the carried forward variables */
 
-	use "$workingdata/bhps_constant_vars", clear
+	use "$workingdata/bhps_constant_vars1", clear
+	append using "$workingdata/bhps_constant_vars2"
 	replace wave = wave - 18
+	ren racel racel_bhps
 	append using "$workingdata/usoc_extracted"
 	append using "$workingdata/usoc_wave1"
 	egen double max_pidp = max(pidp) if !missing(pid), by(pid)
@@ -72,16 +74,55 @@ program define clean_ff_vars
 	drop max_pidp
 	drop if missing(pidp) // get rid of people who are in the bhps but not usoc
 
-	* Copy forward education level (and race but this is still often missing)
+	* Make consistent race variable 
+	gen raceb = 1 if race == 1 | inlist(racel_bhps, 1, 2, 3, 4, 5) | inlist(racel, 1, 2, 3, 4) //white
+	replace raceb = 2 if inlist(racel_bhps, 6, 7, 8, 9) | inlist(racel, 5, 6, 7, 8) // mixed
+	replace raceb = 3 if race == 5 | racel == 10 | racel == 9 // Indian
+	replace raceb = 4 if race == 6 | racel == 11 | racel == 10 // Pakistani
+	replace raceb = 5 if race == 7 | racel == 12 | racel == 11 // Bangladeshi
+	replace raceb = 6 if race == 8 | inlist(racel, 13, 17) | inlist(racel, 12, 13) // Other Asian
+	replace raceb = 7 if race == 2 | racel == 14 | racel == 14 // Black Caribbean 
+	replace raceb = 8 if race == 3 | racel == 15 | racel == 15 // Black African 
+	replace raceb = 9 if inlist(race, 4, 9) | inlist(racel, 16, 18) | inlist(racel, 16, 17, 97) // Other
+	label define racelab1 1 "White" 2 "Mixed" 3 "Indian" 4 "Pakistani" 5 "Bangladeshi" 6 "Other Asian" 7 "Caribbean" 8 "African" 9 "Other"
+	label values raceb racelab1
+	drop race racel_bhps
+	
+	* Copy forward education level and race
 	sort pidp wave
 	by pidp (wave): replace edgrpnew = edgrpnew[_n-1] if missing(edgrpnew)
-	by pidp (wave): replace racel = racel[_n-1] if missing(racel) | racel < 0
-
+	by pidp (wave): replace raceb = raceb[_n-1] if missing(raceb) // still missing sometimes but better
+	
 	cap label drop edgrpnew
 	label define edgrpnew 0 "None of the above qualifications" 1 "Less than GCSEs" 2 "GCSEs" 3 "A-levels" ///
 		4 "Vocational higher" 5 "University"
 	label values edgrpnew edgrpnew 
-
+	
+	* Copy forward job tenure variable 
+	by pidp (wave): gen days_since_last_int = intdate - intdate[_n-1]
+	
+	// If their jb1status changed since previous wave and now they have a job:
+	replace jb1tenure = floor(0.5 * days_since_last_int) if ///
+		jb1status != jb1status[_n-1] & missing(jb1tenure) & ///
+		inlist(jb1status, 1, 2) & inrange(days_since_last_int, 1, 500)
+	
+	by pidp (wave): replace jb1tenure = jb1tenure[_n-1] + days_since_last_int if ///
+		missing(jb1tenure) & !missing(jb1tenure[_n-1]) & jbsamr == 1 & ///
+		(wave == wave[_n-1] + 1 | wave == 2 & wave[_n-1] == 0) & inrange(days_since_last_int, 1, 500)
+	// copy forward job tenure + int distance if it's missing and they're in same job as last wave & we see them
+	// in last wave & their last wave was 1-500 days ago. Note some BHPS people joined usoc straight in wave 2. 
+	
+	* Generate categorical job tenure variable 
+	gen job_tenure = 1 if jb1tenure <= 365.25 | (jbsamr == 2 & days_since_last_int <= 365) 
+	// jbsamr = 2 is if changed job since last interview
+	replace job_tenure = 2 if inrange(jb1tenure, 365.35, 730.5)
+	replace job_tenure = 3 if inrange(jb1tenure, 730.5, 1826.25)
+	replace job_tenure = 4 if jb1tenure >= 1826.25 & !missing(jb1tenure)
+	label define job_tenure 1 "<1 year" 2 "1-2 years" 3 "2-5 years" 4 "5+ years"
+	label values job_tenure job_tenure
+	
+	
+	
 end
 
 capture program drop make_partner_vars
@@ -220,7 +261,7 @@ program define clean_circumstance_vars
 	label define female 0 "Men" 1 "Women"
 	label values female female 
 	
-	gen racea = .
+	/*gen racea = .
 	replace racea = 1 if inlist(racel, 1,2,3,4)
 	replace racea = 2 if inlist(racel, 5,6,7,8)
 	replace racea = 3 if inlist(racel, 9,10,11,12,13)
@@ -242,7 +283,7 @@ program define clean_circumstance_vars
 	replace raceb = 9 if inrange(racel,16,18) //Other
 	label define racelab1 1 "White" 2 "Mixed" 3 "Indian" 4 "Pakistani" 5 "Bangladeshi" 6 "Other Asian" 7 "Caribbean" 8 "African" 9 "Other"
 	label values raceb racelab1
-	order racea raceb, after(racel)
+	order racea raceb, after(racel) */
 	
 	gen pen_mem = 100*jbpenm // so that pension membership is /10
 
