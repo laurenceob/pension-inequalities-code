@@ -25,7 +25,7 @@ local a JK
 cd "${path_`a'}\data"
 
 *inflation data - for generating real earnings
-import excel "inflation.xls", sheet("data") cellrange(A9:B42) clear
+/*import excel "inflation.xls", sheet("data") cellrange(A9:B42) clear
 destring A, replace
 ren A intyear
 ren B cpih
@@ -36,7 +36,80 @@ drop _merge
 *generating real earnings (2020)
 gen real_earn = jb1earn*(108.9/cpih)
 gen lnrealearn = ln(real_earn)
+gen realpartearn = partner_earn*(108.9/cpih)
+gen lnrealpartearn = 0
+replace lnrealpartearn = ln(realpartearn) if realpartearn > 0
+
+*generating kid dummies for covariates table
+gen kid0 = 0
+replace kid0 = 1 if kidnum == 0
+gen kid12 = 0
+replace kid12 = 1 if kidnum == 1
+gen kid34 = 0
+replace kid34 = 1 if kidnum == 2
+gen kid5ormore = 0
+replace kid5ormore = 1 if kidnum == 3
+
+*generating education dummies for covariates table
+gen uni = 0
+replace uni = 1 if edgrpnew == 5
+gen alevels = 0
+replace alevels = 1 if edgrpnew == 3
+gen gcse = 0
+replace gcse = 1 if edgrpnew == 2
+gen lessgcse = 0
+replace lessgcse = 1 if edgrpnew == 1
+
+*generating employer size dummies for covariates table
+gen jbsize1_24 = 0
+replace jbsize1_24 = 1 if inrange(jbsize,1,3)
+gen jbsize25_199 = 0
+replace jbsize25_199 = 1 if inrange(jbsize,4,6)
+gen jbsize200plus = 0
+replace jbsize200plus = 1 if inrange(jbsize,7,9)
+
+*Housing tenure for covariates table
+gen rent = 0 
+replace rent = 1 if tenure_broad == 3
+gen owned = 0 
+replace owned = 1 if tenure_broad == 1
+gen mort = 0
+replace mort = 1 if tenure_broad == 2
+
+*If have long term condition/disability
+gen disability = 0 
+replace disability = 1 if health == 1
+
+*sector variable for covariates table
+gen priv = 0
+replace priv = 1 if sector == 1
+gen pub = 0
+replace pub = 1 if sector == 2
+gen self = 0
+replace self = 1 if sector == 0
+
+*partner sector for covariates table
+gen priv_p = 0
+replace priv_p = 1 if partner_sector == 1
+gen pub_p = 0
+replace pub_p = 1 if partner_sector == 2
+gen self_p = 0
+replace self_p = 1 if partner_sector == 0
+
+*relationship dummies for covariates table
+gen mar = 0
+replace mar = 1 if marstat_broad == 1
+gen coupl = 0
+replace coupl = 1 if marstat_broad == 2
+gen divorce = 0
+replace divorce = 1 if marstat_broad == 3
+gen nev_mar = 0
+replace nev_mar = 1 if marstat_broad == 4
+
 save "usoc_clean.dta", replace
+*/
+
+
 
 use "usoc_clean.dta", clear
 local a JK
@@ -173,22 +246,62 @@ cd "${path_`a'}\output"
 
 *creating a table of covariates by race
 preserve
+foreach i in kid0 kid12 kid34 kid5ormore uni alevels gcse lessgcse jbsize1_24 jbsize25_199 jbsize200plus female couple married disability owned rent mort priv pub self priv_p pub_p self_p partner_inwork invinc0 invinc100to1k invinc1to100 invinc1kplus mar coupl divorce nev_mar{
+	replace `i' = `i'*100
+}
 keep if jbsize > 0
-collapse (mean) age real_earn jbsize female numkids partner_earn married [pw=rxwgt], by(raceb)
+collapse (mean) age real_earn kid0 kid12 kid34 kid5ormore uni alevels gcse lessgcse jbsize1_24 jbsize25_199 jbsize200plus priv pub self priv_p pub_p self_p female realpartearn owned rent mort hvalue disability partner_inwork saved invinc0 invinc1to100 invinc100to1k invinc1kplus mar coupl divorce nev_mar [pw=rxwgt], by(raceb)
+*order of table: individual vars, job vars, partner vars, wealth vars
+order partner_inwork realpartearn, after(self)
+order disability female, after(real_earn)
+order uni alevels gcse lessgcse, before(kid0)
+order mar coupl divorce nev_mar, after(lessgcse)
+order owned rent mort hvalue, after(invinc1kplus)
 xpose, clear varname
 order _varname
 gen n=_n
 drop if n==1
 drop n v10
 replace _varname = "Age" if _varname == "age"
-replace _varname = "Real Earnings" if _varname == "real_earn"
-replace _varname = "Employer Size" if _varname == "jbsize"
+replace _varname = "Real Weekly Earnings" if _varname == "real_earn"
+replace _varname = "Percent With No Kids" if _varname == "kid0"
+replace _varname = "Percent With 1-2 Kids" if _varname == "kid12"
+replace _varname = "Percent With 3-4 Kids" if _varname == "kid34"
+replace _varname = "Percent With 5+ Kids" if _varname == "kid5ormore"
+replace _varname = "Percent Uni Degree" if _varname == "uni"
+replace _varname = "Percent A-levels" if _varname == "alevels"
+replace _varname = "Percent GCSEs" if _varname == "gcse"
+replace _varname = "Percent Less Than GCSEs" if _varname == "lessgcse"
+replace _varname = "Percent In Company With 1-24 Employees" if _varname == "jbsize1_24"
+replace _varname = "Percent In Company With 25-199 Employees" if _varname == "jbsize25_199"
+replace _varname = "Percent In Company With 200+ Employees" if _varname == "jbsize200plus"
+replace _varname = "Percent Private Sector" if _varname == "priv"
+replace _varname = "Percent Public Sector" if _varname == "pub"
+replace _varname = "Percent Self-Employed" if _varname == "self"
+replace _varname = "Percent With Partner In Work" if _varname == "partner_inwork"
+replace _varname = "Percent Private Sector: Partner" if _varname == "priv_p"
+replace _varname = "Percent Public Sector: Partner" if _varname == "pub_p"
+replace _varname = "Percent Self-Employed: Partner" if _varname == "self_p"
 replace _varname = "Percent Female" if _varname == "female"
-replace _varname = "Num. Kids" if _varname == "numkids"
-replace _varname = "Partners Earnings" if _varname == "partner_earn"
-replace _varname = "Percent Married" if _varname == "married"
+replace _varname = "Real Partner Weekly Earnings" if _varname == "realpartearn"
+replace _varname = "Percent Living As Couple" if _varname == "coupl"
+replace _varname = "Percent Married/Civil Partner" if _varname == "mar"
+replace _varname = "Percent Widowed/Divorced/Separated" if _varname == "divorce"
+replace _varname = "Percent Never Married" if _varname == "nev_mar"
+replace _varname = "Percent Long-Term Condition or Disability" if _varname == "disability"
+replace _varname = "Percent Renting House" if _varname == "rent"
+replace _varname = "Percent Own House Outright" if _varname == "owned"
+replace _varname = "Percent Mortgage" if _varname == "mort"
+replace _varname = "Average House Value (if owned)" if _varname == "hvalue"
+replace _varname = "Average Monthly Savings" if _varname == "saved"
+replace _varname = "Percent With No Annual Investment/Savings Income" if _varname == "invinc0"
+replace _varname = "Percent with Annual Investment/Savings Income of 1-100" if _varname == "invinc1to100"
+replace _varname = "Percent with Annual Investment/Savings Income of 100-1k" if _varname == "invinc100to1k"
+replace _varname = "Percent with Annual Investment/Savings Income of 1k+" if _varname == "invinc1kplus"
+format v1 v2 v3 v4 v5 v6 v7 v8 v9 %12.1fc 
 listtab using "covariates_by_race.tex", rstyle(tabular) replace
 restore
+*include in table notes: Education variables refer to the highest qualification an individual has achieved
 
 local a JK
 cd "${path_`a'}\data"
@@ -605,7 +718,7 @@ foreach x in ownperc ownperc_cond pen_mem {
 	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
 	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
 	
-	binscatter `x' lnrealearn, by(raceb) ytitle("`ytitle'") xtitle("Log Weekly Real Earnings (£)") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Caribbean") lab(7 "African")) line(none)
+	binscatter `x' lnrealearn, by(raceb) ytitle("`ytitle'") xtitle("Log Real Weekly Earnings (£)") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Caribbean") lab(7 "African")) line(none)
 	graph export "`x'_inc_race_bin.pdf", replace
 }
 restore
@@ -746,10 +859,9 @@ foreach x in ownperc ownperc_cond pen_mem {
 	
 	eststo: oaxaca `x' age agesq intyear lnrealearn sector jbsize industry occupation edgrpnew region female kidnum raceb married partner_edu lnpartearn partner_sector [pw=rxwgt] if inrange(health,1,2), by(health) pooled 
 	
-	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained") drop(unexplained:age unexplained:lnrealearn unexplained:agesq unexplained:kidnum unexplained:region unexplained:edgrpnew unexplained:raceb unexplained:intyear unexplained:female unexplained:married unexplained:sector unexplained:jbsize unexplained:industry unexplained:occupation unexplained:partner_edu unexplained:lnpartearn unexplained:partner_sector unexplained:_cons explained:age explained:lnrealearn explained:agesq explained:kidnum explained:region explained:edgrpnew explained:raceb explained:intyear explained:female explained:married explained:sector explained:jbsize explained:industry explained:occupation explained:partner_edu explained:lnpartearn explained:partner_sector)
+	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained") drop(unexplained:* explained:*)
 	eststo clear
 }
-
 
 
 *-----------------------EDUCATION-----------------------------------------------
