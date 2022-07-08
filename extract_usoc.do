@@ -27,7 +27,7 @@ usextract using "$workingdata/usoc_extracted",
 		tenure(tenure)
 		totmortgage(totmortgage)
 		monthlymortgage(monthlymortgage)
-		rawvars(hidp tenure_dv)
+		rawvars(hidp tenure_dv rent_dv houscost1_dv houscost2_dv)
 		mindic
 	)
 
@@ -76,7 +76,9 @@ usextract using "$workingdata/usoc_extracted",
 		ownperc(ownperc)
 		rawvars(sex hidp pno pidp jbterm1 jbsect jbsectpub jbsize 
 				jbsic07_cc jbsoc00_cc j2pay_dv marstat_dv samejob
-				ndepchl_dv jbsamr mstatsam mstatsamn lwwrong empchk racel health)
+				ndepchl_dv jbsamr mstatsam mstatsamn lwwrong empchk racel 
+				health ageret retamt retsuf rtfnd1 rtfnd2 rtfnd3 rtfnd4 rtfnd5 
+				rtfnd6 rtfnd7 rtfnd8 rtfnd9 rtfnd10 rtfnd96)
 		mindic
 		
 	)
@@ -92,13 +94,37 @@ usextract using "$workingdata/usoc_extracted",
 * Get other variables that are fed forward from different waves 
  # delimit ;
 
-    bhpsextract	using "$workingdata/bhps_constant_vars",
-		waves(1(1)18)
+    bhpsextract	using "$workingdata/bhps_constant_vars1",
+		waves(1(1)12)
 		
 		/* indresp */
 		indrespoptions(
 			edgrpnew(edgrpnew)
-			rawvars(sex hid pno pid)
+			jb1status(jb1status)
+			jb1start(jb1startd(jb1startd) jb1startm(jb1startm) jb1starty(jb1starty))
+			jb1tenure(jb1tenure)
+			intdate(intdate(intdate) intyear(intyear) intmonth(intmonth))
+			spellstart(startday(startday) startmonth(startmonth) startyear(startyear))
+			rawvars(sex hid pno pid race)
+			mindic
+		)
+		replace;
+#delimit cr
+
+ # delimit ;
+
+    bhpsextract	using "$workingdata/bhps_constant_vars2",
+		waves(13(1)18)
+		
+		/* indresp */
+		indrespoptions(
+			edgrpnew(edgrpnew)
+			jb1status(jb1status)
+			jb1start(jb1startd(jb1startd) jb1startm(jb1startm) jb1starty(jb1starty))
+			jb1tenure(jb1tenure)
+			intdate(intdate(intdate) intyear(intyear) intmonth(intmonth))
+			spellstart(startday(startday) startmonth(startmonth) startyear(startyear))
+			rawvars(sex hid pno pid racel)
 			mindic
 		)
 		replace;
@@ -113,7 +139,11 @@ usextract using "$workingdata/usoc_wave1",
 	
 	/* indresp */
 	indrespoptions(
+		intdate(intdate(intdate) intyear(intyear) intmonth(intmonth))
 		edgrpnew(edgrpnew)
+		jb1status(jb1status)
+		jb1start(jb1startd(jb1startd) jb1startm(jb1startm) jb1starty(jb1starty))
+		jb1tenure(jb1tenure)
 		rawvars(sex hidp pno pidp racel)
 		
 	)
