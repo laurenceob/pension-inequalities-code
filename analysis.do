@@ -746,7 +746,11 @@ foreach x in ownperc ownperc_cond pen_mem {
 	
 	eststo: oaxaca `x' age agesq intyear lnrealearn sector jbsize industry occupation edgrpnew region female kidnum raceb married partner_edu lnpartearn partner_sector [pw=rxwgt] if inrange(health,1,2), by(health) pooled 
 	
+<<<<<<< HEAD
 	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained") drop(unexplained:* explained:*)
+=======
+	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained") drop(unexplained:age unexplained:lnrealearn unexplained:agesq unexplained:kidnum unexplained:region unexplained:edgrpnew unexplained:raceb unexplained:intyear unexplained:female unexplained:married unexplained:sector unexplained:jbsize unexplained:industry unexplained:occupation unexplained:partner_edu unexplained:lnpartearn unexplained:partner_sector unexplained:_cons explained:age explained:lnrealearn explained:agesq explained:kidnum explained:region explained:edgrpnew explained:raceb explained:intyear explained:female explained:married explained:sector explained:jbsize explained:industry explained:occupation explained:partner_edu explained:lnpartearn explained:partner_sector)
+>>>>>>> b124fb9a49d0456a02e91b69eafbbdf927626426
 	eststo clear
 }
 
