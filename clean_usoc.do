@@ -134,7 +134,8 @@ program define make_partner_vars
 	sort hidp wave pno
 	
 	* Generate a variable for whether the respondent is in work or not
-	gen inwork = inlist(econstat, 1, 2)
+	gen inwork = inlist(jb1status, 1, 2)
+	replace jb1earn = 0 if inwork == 0
 
 	* Now get partner's work status. Do this by keeping work status, renaming it to be partner_inwork, and then
 	* merging it back in on the partner
@@ -261,31 +262,9 @@ program define clean_circumstance_vars
 	label define female 0 "Men" 1 "Women"
 	label values female female 
 	
-	/*gen racea = .
-	replace racea = 1 if inlist(racel, 1,2,3,4)
-	replace racea = 2 if inlist(racel, 5,6,7,8)
-	replace racea = 3 if inlist(racel, 9,10,11,12,13)
-	replace racea = 4 if inlist(racel, 14,15,16)
-	replace racea = 5 if inlist(racel, 17,18)
-	label define racelab 1 "White" 2 "Mixed" 3 "Asian" 4 "Black" 5 "Other"
-	label values racea racelab
-
-	*new race variable - for graph
-	gen raceb = .
-	replace raceb = 1 if inlist(racel, 1,2,3,4) //white
-	replace raceb = 2 if inlist(racel, 5,6,7,8) //mixed
-	replace raceb = 3 if racel == 9 //Indian
-	replace raceb = 4 if racel == 10 //Pakistani
-	replace raceb = 5 if racel == 11 //Bangladeshi
-	replace raceb = 6 if inlist(racel, 12,13) //Other Asian
-	replace raceb = 7 if racel == 14 //Caribbean
-	replace raceb = 8 if racel == 15 //African
-	replace raceb = 9 if inrange(racel,16,18) //Other
-	label define racelab1 1 "White" 2 "Mixed" 3 "Indian" 4 "Pakistani" 5 "Bangladeshi" 6 "Other Asian" 7 "Caribbean" 8 "African" 9 "Other"
-	label values raceb racelab1
-	order racea raceb, after(racel) */
-	
 	gen pen_mem = 100*jbpenm // so that pension membership is /10
+	replace pen_mem = 0 if pen_mem == .
+	replace ownperc = 0 if ownperc == .b
 
 	*creating age dummy 
 	gen age_dum = 0 if inrange(age,22,25)
@@ -330,8 +309,78 @@ program define clean_circumstance_vars
 	replace kidnum = 3 if numkids > 4
 	label define kid 0 "0" 1 "1-2" 2 "3-4" 3 "5+"
 	label values kidnum kid
-	
-	
+	save "$workingdata/usoc_clean", replace
+
+	*inflation data - for generating real earnings
+import excel "$workingdata/inflation.xls", sheet("data") cellrange(A9:B42) clear
+destring A, replace
+ren A intyear
+ren B cpih
+save "$workingdata/inflation.dta", replace
+merge 1:m intyear using "$workingdata/usoc_clean.dta"
+keep if _merge == 3
+drop _merge
+*generating real earnings (2020)
+gen real_earn = jb1earn*(108.9/cpih)
+gen lnrealearn = ln(real_earn)
+gen realpartearn = partner_earn*(108.9/cpih)
+gen lnrealpartearn = 0
+replace lnrealpartearn = ln(realpartearn) if !missing(realpartearn) 
+replace lnrealpartearn = 0 if realpartearn == 0
+
+*generating kid dummies for covariates table
+gen kid0 = 0
+replace kid0 = 1 if kidnum == 0
+gen kid12 = 0
+replace kid12 = 1 if kidnum == 1
+gen kid34 = 0
+replace kid34 = 1 if kidnum == 2
+gen kid5ormore = 0
+replace kid5ormore = 1 if kidnum == 3
+
+*generating education dummies for covariates table
+gen uni = 0
+replace uni = 1 if edgrpnew == 5
+gen alevels = 0
+replace alevels = 1 if edgrpnew == 3
+gen gcse = 0
+replace gcse = 1 if edgrpnew == 2
+gen lessgcse = 0
+replace lessgcse = 1 if edgrpnew == 1
+
+
+*Housing tenure for covariates table
+gen rent = 0 
+replace rent = 1 if tenure_broad == 3
+gen owned = 0 
+replace owned = 1 if tenure_broad == 1
+gen mort = 0
+replace mort = 1 if tenure_broad == 2
+
+*If have long term condition/disability
+gen disability = 0 
+replace disability = 1 if health == 1
+
+*relationship dummies for covariates table
+gen mar = 0
+replace mar = 1 if marstat_broad == 1
+gen coupl = 0
+replace coupl = 1 if marstat_broad == 2
+gen divorce = 0
+replace divorce = 1 if marstat_broad == 3
+gen nev_mar = 0
+replace nev_mar = 1 if marstat_broad == 4
+
+gen retneed = 0 
+replace retneed = -1 if retsuf < 0
+replace retneed = 100 if inrange(retsuf,1,2) //enough or more to meet needs
+
+gen famcont = 0 
+replace famcont = -1 if rtfnd7 < 0
+replace famcont = 100 if rtfnd7 == 1 //percent with financial support from family
+
+*winsorizing variables
+winsor houscost1_dv, p(.01) gen(housecost_win)
 
 end
 
@@ -371,7 +420,8 @@ program define clean_job_vars
 	replace partner_sector = 0 if partner_jb1status == 2
 	replace partner_sector = 1 if partner_public == 0 & partner_jb1status == 1
 	replace partner_sector = 2 if partner_public == 1 & partner_jb1status == 1
-	label define partner_sect 0 "Self-employed" 1 "Private" 2 "Public"
+	replace partner_sector = 3 if partner_inwork == 0
+	label define partner_sect 0 "Self-employed" 1 "Private" 2 "Public" 3 "Not in work"
 	label values partner_sector partner_sect
 
 	*putting jobsize of 1 if self-employed
@@ -408,6 +458,33 @@ program define clean_job_vars
 	replace industry = 21 if jbsic07_cc == 99
 	label define ind 1 "Agriculture, Forestry and Fishing" 2 "Mining and Quarrying" 3 "Manufacturing" 4 "Electricity, gas, steam and air conditioning supply" 5 "Water supply, sewerage, waste management and remediation activities" 6 "Construction" 7 "Wholesale and retail trade; repair of motor vehicles and motorcycles" 8 "Transportation and storage" 9 "Accommodation and food service activities" 10 "Information and communication" 11 "Financial and insurance activities" 12 "Real estate activities" 13 "Professional, scientific and technical activities" 14 "Administrative and support service activities" 15 "Public administration and defence; compulsory social security" 16 "Education" 17 "Human health and social work activities" 18 "Arts, entertainment and recreation" 19 "Other service activities" 20 "Activities of households as employers; undifferentiated goods and services producing activities of households for own use" 21 "Activities of extraterritorial organisations and bodies"
 	label values industry ind
+	
+	*sector variable for covariates table
+gen priv = 0
+replace priv = 1 if sector == 1
+gen pub = 0
+replace pub = 1 if sector == 2
+gen self = 0
+replace self = 1 if sector == 0
+
+*partner sector for covariates table
+gen priv_p = 0
+replace priv_p = 1 if partner_sector == 1
+gen pub_p = 0
+replace pub_p = 1 if partner_sector == 2
+gen self_p = 0
+replace self_p = 1 if partner_sector == 0
+
+*generating employer size dummies for covariates table
+gen jbsize1_24 = 0
+replace jbsize1_24 = 1 if inrange(jbsize,1,3)
+gen jbsize25_199 = 0
+replace jbsize25_199 = 1 if inrange(jbsize,4,6)
+gen jbsize200plus = 0
+replace jbsize200plus = 1 if inrange(jbsize,7,9)
+
+gen parttime = 0
+replace parttime = 1 if jb1hrsot <= 30
 
 
 end
