@@ -75,16 +75,17 @@ program define clean_ff_vars
 	drop if missing(pidp) // get rid of people who are in the bhps but not usoc
 
 	* Make consistent race variable 
-	gen raceb = 1 if race == 1 | inlist(racel_bhps, 1, 2, 3, 4, 5) | inlist(racel, 1, 2, 3, 4) //white
-	replace raceb = 2 if inlist(racel_bhps, 6, 7, 8, 9) | inlist(racel, 5, 6, 7, 8) // mixed
-	replace raceb = 3 if race == 5 | racel == 10 | racel == 9 // Indian
-	replace raceb = 4 if race == 6 | racel == 11 | racel == 10 // Pakistani
-	replace raceb = 5 if race == 7 | racel == 12 | racel == 11 // Bangladeshi
-	replace raceb = 6 if race == 8 | inlist(racel, 13, 17) | inlist(racel, 12, 13) // Other Asian
-	replace raceb = 7 if race == 2 | racel == 14 | racel == 14 // Black Caribbean 
-	replace raceb = 8 if race == 3 | racel == 15 | racel == 15 // Black African 
-	replace raceb = 9 if inlist(race, 4, 9) | inlist(racel, 16, 18) | inlist(racel, 16, 17, 97) // Other
-	label define racelab1 1 "White" 2 "Mixed" 3 "Indian" 4 "Pakistani" 5 "Bangladeshi" 6 "Other Asian" 7 "Caribbean" 8 "African" 9 "Other"
+	gen raceb = 1 if race == 1 | inlist(racel_bhps, 1, 2, 3, 4) | inlist(racel, 1, 2) //white british
+	replace raceb = 2 if racel_bhps == 5 | inlist(racel, 3, 4) //other White
+	replace raceb = 3 if inlist(racel_bhps, 6, 7, 8, 9) | inlist(racel, 5, 6, 7, 8) // mixed
+	replace raceb = 4 if race == 5 | racel == 10 | racel == 9 // Indian
+	replace raceb = 5 if race == 6 | racel == 11 | racel == 10 // Pakistani
+	replace raceb = 6 if race == 7 | racel == 12 | racel == 11 // Bangladeshi
+	replace raceb = 7 if race == 8 | inlist(racel, 13, 17) | inlist(racel, 12, 13) // Other Asian
+	replace raceb = 8 if race == 2 | racel == 14 | racel == 14 // Black Caribbean 
+	replace raceb = 9 if race == 3 | racel == 15 | racel == 15 // Black African 
+	replace raceb = 10 if inlist(race, 4, 9) | inlist(racel, 16, 18) | inlist(racel, 16, 17, 97) // Other
+	label define racelab1 1 "White British" 2 "Other White" 3 "Mixed" 4 "Indian" 5 "Pakistani" 6 "Bangladeshi" 7 "Other Asian" 8 "Caribbean" 9 "African" 10 "Other" 
 	label values raceb racelab1
 	drop race racel_bhps
 	
@@ -312,75 +313,82 @@ program define clean_circumstance_vars
 	save "$workingdata/usoc_clean", replace
 
 	*inflation data - for generating real earnings
-import excel "$workingdata/inflation.xls", sheet("data") cellrange(A9:B42) clear
-destring A, replace
-ren A intyear
-ren B cpih
-save "$workingdata/inflation.dta", replace
-merge 1:m intyear using "$workingdata/usoc_clean.dta"
-keep if _merge == 3
-drop _merge
-*generating real earnings (2020)
-gen real_earn = jb1earn*(108.9/cpih)
-gen lnrealearn = ln(real_earn)
-gen realpartearn = partner_earn*(108.9/cpih)
-gen lnrealpartearn = 0
-replace lnrealpartearn = ln(realpartearn) if !missing(realpartearn) 
-replace lnrealpartearn = 0 if realpartearn == 0
+	import excel "$workingdata/inflation.xls", sheet("data") cellrange(A9:B42) clear
+	destring A, replace
+	ren A intyear
+	ren B cpih
+	save "$workingdata/inflation.dta", replace
+	merge 1:m intyear using "$workingdata/usoc_clean.dta"
+	keep if _merge == 3
+	drop _merge
+	*generating real earnings (2020)
+	gen real_earn = jb1earn*(108.9/cpih)
+	gen lnrealearn = ln(real_earn)
+	gen realpartearn = partner_earn*(108.9/cpih)
+	gen lnrealpartearn = 0
+	replace lnrealpartearn = ln(realpartearn) if !missing(realpartearn) 
+	replace lnrealpartearn = 0 if realpartearn == 0
 
-*generating kid dummies for covariates table
-gen kid0 = 0
-replace kid0 = 1 if kidnum == 0
-gen kid12 = 0
-replace kid12 = 1 if kidnum == 1
-gen kid34 = 0
-replace kid34 = 1 if kidnum == 2
-gen kid5ormore = 0
-replace kid5ormore = 1 if kidnum == 3
+	*generating kid dummies for covariates table
+	gen kid0 = 0
+	replace kid0 = 1 if kidnum == 0
+	gen kid12 = 0
+	replace kid12 = 1 if kidnum == 1
+	gen kid34 = 0
+	replace kid34 = 1 if kidnum == 2
+	gen kid5ormore = 0
+	replace kid5ormore = 1 if kidnum == 3
 
-*generating education dummies for covariates table
-gen uni = 0
-replace uni = 1 if edgrpnew == 5
-gen alevels = 0
-replace alevels = 1 if edgrpnew == 3
-gen gcse = 0
-replace gcse = 1 if edgrpnew == 2
-gen lessgcse = 0
-replace lessgcse = 1 if edgrpnew == 1
+	*generating education dummies for covariates table
+	gen uni = 0
+	replace uni = 1 if edgrpnew == 5
+	gen alevels = 0
+	replace alevels = 1 if edgrpnew == 3
+	gen gcse = 0
+	replace gcse = 1 if edgrpnew == 2
+	gen lessgcse = 0
+	replace lessgcse = 1 if edgrpnew == 1
 
 
-*Housing tenure for covariates table
-gen rent = 0 
-replace rent = 1 if tenure_broad == 3
-gen owned = 0 
-replace owned = 1 if tenure_broad == 1
-gen mort = 0
-replace mort = 1 if tenure_broad == 2
+	*Housing tenure for covariates table
+	gen rent = 0 
+	replace rent = 1 if tenure_broad == 3
+	gen owned = 0 
+	replace owned = 1 if tenure_broad == 1
+	gen mort = 0
+	replace mort = 1 if tenure_broad == 2
 
-*If have long term condition/disability
-gen disability = 0 
-replace disability = 1 if health == 1
+	*If have long term condition/disability
+	gen disability = 0 
+	replace disability = 1 if health == 1
 
-*relationship dummies for covariates table
-gen mar = 0
-replace mar = 1 if marstat_broad == 1
-gen coupl = 0
-replace coupl = 1 if marstat_broad == 2
-gen divorce = 0
-replace divorce = 1 if marstat_broad == 3
-gen nev_mar = 0
-replace nev_mar = 1 if marstat_broad == 4
+	*relationship dummies for covariates table
+	gen mar = 0
+	replace mar = 1 if marstat_broad == 1
+	gen coupl = 0
+	replace coupl = 1 if marstat_broad == 2
+	gen divorce = 0
+	replace divorce = 1 if marstat_broad == 3
+	gen nev_mar = 0
+	replace nev_mar = 1 if marstat_broad == 4
 
-gen retneed = 0 
-replace retneed = -1 if retsuf < 0
-replace retneed = 100 if inrange(retsuf,1,2) //enough or more to meet needs
+	gen retneed = 0 
+	replace retneed = -1 if retsuf < 0
+	replace retneed = 100 if inrange(retsuf,1,2) //enough or more to meet needs
 
-gen famcont = 0 
-replace famcont = -1 if rtfnd7 < 0
-replace famcont = 100 if rtfnd7 == 1 //percent with financial support from family
+	gen famcont = 0 
+	replace famcont = -1 if rtfnd7 < 0
+	replace famcont = 100 if rtfnd7 == 1 //percent with financial support from family
 
-*winsorizing variables
-winsor houscost1_dv, p(.01) gen(housecost_win)
+	*winsorizing variables
+	winsor houscost1_dv, p(.01) gen(housecost_win)
+
+	*generating nominal yearly earnings and dummy if annual earn > 10k
+	gen annual_earn = jb1earn*52
+	gen annual_dum = 0
+	replace annual_dum = 1 if annual_earn >= 10000
+	label define annual_dum 0 "Less than 10k per year" 1 "More than 10k per year"
+	label value annual_dum annual_dum
 
 end
 
@@ -460,31 +468,31 @@ program define clean_job_vars
 	label values industry ind
 	
 	*sector variable for covariates table
-gen priv = 0
-replace priv = 1 if sector == 1
-gen pub = 0
-replace pub = 1 if sector == 2
-gen self = 0
-replace self = 1 if sector == 0
+	gen priv = 0
+	replace priv = 1 if sector == 1
+	gen pub = 0
+	replace pub = 1 if sector == 2
+	gen self = 0
+	replace self = 1 if sector == 0
 
-*partner sector for covariates table
-gen priv_p = 0
-replace priv_p = 1 if partner_sector == 1
-gen pub_p = 0
-replace pub_p = 1 if partner_sector == 2
-gen self_p = 0
-replace self_p = 1 if partner_sector == 0
+	*partner sector for covariates table
+	gen priv_p = 0
+	replace priv_p = 1 if partner_sector == 1
+	gen pub_p = 0
+	replace pub_p = 1 if partner_sector == 2
+	gen self_p = 0
+	replace self_p = 1 if partner_sector == 0
 
-*generating employer size dummies for covariates table
-gen jbsize1_24 = 0
-replace jbsize1_24 = 1 if inrange(jbsize,1,3)
-gen jbsize25_199 = 0
-replace jbsize25_199 = 1 if inrange(jbsize,4,6)
-gen jbsize200plus = 0
-replace jbsize200plus = 1 if inrange(jbsize,7,9)
+	*generating employer size dummies for covariates table
+	gen jbsize1_24 = 0
+	replace jbsize1_24 = 1 if inrange(jbsize,1,3)
+	gen jbsize25_199 = 0
+	replace jbsize25_199 = 1 if inrange(jbsize,4,6)
+	gen jbsize200plus = 0
+	replace jbsize200plus = 1 if inrange(jbsize,7,9)
 
-gen parttime = 0
-replace parttime = 1 if jb1hrsot <= 30
+	gen parttime = 0
+	replace parttime = 1 if jb1hrsot <= 30
 
 
 end
