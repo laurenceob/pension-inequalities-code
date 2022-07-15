@@ -25,14 +25,14 @@ program define main
 	* Make partner variables 
 	make_partner_vars
 	
-	* Drop people with proxy interviews 
-	keep if ivfio == 1
+	* Drop people with proxy interviews - no pension data 
+	keep if ivfio == 1 
 
 	* Drop households if anyone in them has a missing interview year (this is only a few obs)
 	gen missing_intyear = missing(intyear)
 	egen missing_intyear_hh = sum(missing_intyear), by(wave hidp)
 	qui count if missing_intyear_hh == 1
-	assert r(N) < 30
+	*assert r(N) < 30
 	drop if missing_intyear_hh == 1
 	drop missing_intyear*
 	
@@ -75,17 +75,17 @@ program define clean_ff_vars
 	drop if missing(pidp) // get rid of people who are in the bhps but not usoc
 
 	* Make consistent race variable 
-	gen raceb = 1 if race == 1 | inlist(racel_bhps, 1, 2, 3, 4) | inlist(racel, 1, 2) //white british
-	replace raceb = 2 if racel_bhps == 5 | inlist(racel, 3, 4) //other White
-	replace raceb = 3 if inlist(racel_bhps, 6, 7, 8, 9) | inlist(racel, 5, 6, 7, 8) // mixed
-	replace raceb = 4 if race == 5 | racel == 10 | racel == 9 // Indian
-	replace raceb = 5 if race == 6 | racel == 11 | racel == 10 // Pakistani
-	replace raceb = 6 if race == 7 | racel == 12 | racel == 11 // Bangladeshi
-	replace raceb = 7 if race == 8 | inlist(racel, 13, 17) | inlist(racel, 12, 13) // Other Asian
-	replace raceb = 8 if race == 2 | racel == 14 | racel == 14 // Black Caribbean 
-	replace raceb = 9 if race == 3 | racel == 15 | racel == 15 // Black African 
-	replace raceb = 10 if inlist(race, 4, 9) | inlist(racel, 16, 18) | inlist(racel, 16, 17, 97) // Other
-	label define racelab1 1 "White British" 2 "Other White" 3 "Mixed" 4 "Indian" 5 "Pakistani" 6 "Bangladeshi" 7 "Other Asian" 8 "Caribbean" 9 "African" 10 "Other" 
+	*Note: cannot disaggregate white due to variable limitation of race 
+	gen raceb = 1 if race == 1 | inlist(racel_bhps, 1, 2, 3, 4, 5) | inlist(racel, 1, 2, 3, 4) //white
+	replace raceb = 2 if inlist(racel_bhps, 6, 7, 8, 9) | inlist(racel, 5, 6, 7, 8) // mixed
+	replace raceb = 3 if race == 5 | racel == 10 | racel == 9 // Indian
+	replace raceb = 4 if race == 6 | racel == 11 | racel == 10 // Pakistani
+	replace raceb = 5 if race == 7 | racel == 12 | racel == 11 // Bangladeshi
+	replace raceb = 6 if race == 8 | inlist(racel, 13, 17) | inlist(racel, 12, 13) // Other Asian
+	replace raceb = 7 if race == 2 | racel == 14 | racel == 14 // Black Caribbean 
+	replace raceb = 8 if race == 3 | racel == 15 | racel == 15 // Black African 
+	replace raceb = 9 if inlist(race, 4, 9) | inlist(racel, 16, 18) | inlist(racel, 16, 17, 97) // Other
+	label define racelab1 1 "White" 2 "Mixed" 3 "Indian" 4 "Pakistani" 5 "Bangladeshi" 6 "Other Asian" 7 "Caribbean" 8 "African" 9 "Other"
 	label values raceb racelab1
 	drop race racel_bhps
 	
@@ -142,13 +142,14 @@ program define make_partner_vars
 	* merging it back in on the partner
 	preserve 
 	* Just keep relevant variables 
-	keep hidp wave ppno marstat_dv inwork jb1earn edgrpnew jbsect jbsectpub jb1status
+	keep hidp wave ppno marstat_dv inwork jb1earn edgrpnew jbsect jbsectpub jb1status ivfio
 	ren inwork partner_inwork 
 	ren jb1earn partner_earn
 	ren edgrpnew partner_edu
 	ren jbsect partner_jbsect
 	ren jbsectpub partner_jbsectpub
 	ren jb1status partner_jb1status
+	ren ivfio partner_ivfio
 	ren ppno pno
 	* Only keep people with a partner
 	keep if pno > 0
@@ -263,9 +264,10 @@ program define clean_circumstance_vars
 	label define female 0 "Men" 1 "Women"
 	label values female female 
 	
-	gen pen_mem = 100*jbpenm // so that pension membership is /10
-	replace pen_mem = 0 if pen_mem == .
-	replace ownperc = 0 if ownperc == .b
+	gen pen_mem = 100*jbpenm // so that pension membership is /100
+	replace pen_mem = 0 if pen_mem == . & jb1status != 1
+	
+	replace ownperc = 0 if missing(ownperc) & jb1status != 1
 
 	*creating age dummy 
 	gen age_dum = 0 if inrange(age,22,25)
@@ -386,10 +388,10 @@ program define clean_circumstance_vars
 	*generating nominal yearly earnings and dummy if annual earn > 10k
 	gen annual_earn = jb1earn*52
 	gen annual_dum = 0
-	replace annual_dum = 1 if annual_earn >= 10000
+	replace annual_dum = 1 if annual_earn >= 10000 & !missing(annual_earn) 
 	label define annual_dum 0 "Less than 10k per year" 1 "More than 10k per year"
 	label value annual_dum annual_dum
-
+	
 end
 
 capture program drop clean_job_vars 
@@ -493,6 +495,33 @@ program define clean_job_vars
 
 	gen parttime = 0
 	replace parttime = 1 if jb1hrsot <= 30
+	
+	***************************************************************************
+	*missing dummies
+	replace lnrealearn = 0 if missing(lnrealearn)
+	gen miss_lnrealearn = 0
+	replace miss_lnrealearn = 1 if lnrealearn == 0
+	replace sector = 3 if missing(sector)
+	label define sect 3 "missing", add
+	replace jbsize = 0 if inlist(jbsize, -9, -8, -2, -1)
+	replace industry = 0 if missing(industry)
+	label define ind 0 "missing", add
+	replace occupation = 0 if missing(occupation)
+	label define occ 0 "missing", add
+	replace edgrpnew = 6 if missing(edgrpnew)
+	label define edgrpnew 6 "missing", add
+	replace region = 13 if missing(region)
+	label define region 13 "missing", add
+	replace female = 2 if missing(female)
+	label define female 2 "missing", add
+	replace health = 0 if inlist(health, -2, -1, -9)
+	label define health 0 "missing"
+	replace partner_edu = 6 if missing(partner_edu)
+	gen miss_lnrealpartearn = 0
+	replace miss_lnrealpartearn = 1 if inlist(marstat_dv, 1, 2) & missing(realpartearn)
+	replace partner_sector = 4 if missing(partner_sector)
+	replace raceb = 10 if missing(raceb)
+	label define racelab1 10 "missing", add
 
 
 end

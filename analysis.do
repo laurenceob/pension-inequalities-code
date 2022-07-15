@@ -4,13 +4,36 @@
 **** Date started: 	27/06/2022 
 **** Description:	This do file produces output for pension inequalities project
 ********************************************************************************/
+capture program drop main
+program define main 
+
+	start 
+
+	sum_stat
+
+	age_trends
+
+	earn_trends
+
+	oaxaca_decom
+
+	regression_output
+
+	auto_enroll
+
+	ethn_sex
+
+	eligible_employ
+
+end
+
 
 *-----------------------------------STARTUP-------------------------------------
-capture program start
+capture program drop start
 program define start
 
 set scheme s1color //good looking graph theme
-ssc install mylabels // installed for clean axis look
+/*ssc install mylabels // installed for clean axis look
 ssc install listtab //table output
 ssc install outreg2 //table output
 ssc install reghdfe //fixed effects regression
@@ -19,6 +42,7 @@ ssc install oaxaca //oaxaca decomposition
 ssc install binscatter //for scatter graphs
 ssc install winsor //winsorize data
 ssc install coefplot
+*/
 
 *setting working directory
 
@@ -39,7 +63,7 @@ foreach x in ownperc ownperc_cond pen_mem {
 	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
 	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
 
-	graph bar `x', over(raceb, label(angle(45))) ytitle("`ytitle'")
+	graph bar `x' if raceb != 10, over(raceb, label(angle(45))) ytitle("`ytitle'")
 	graph export "`x'_race_notinwork.pdf", replace
 }
 restore
@@ -47,7 +71,7 @@ restore
 *Table - splitting by sex
 preserve
 collapse (mean) ownperc pen_mem [pw=rxwgt], by(raceb female)
-drop if female == .a | raceb == .
+drop if female == 2 | raceb == 10
 format pen_mem ownperc %3.2f 
 reshape wide ownperc pen_mem, i(raceb) j(female) 
 ren ownperc0 ownperc_m
@@ -60,17 +84,19 @@ restore
 
 ***********************IMPORTANT****************************************
 keep if inlist(jb1status, 1, 2)  //drops those who are unemployed; 28,605 dropped
+drop if sector == 0 //drops self-employed since missing pen_mem; 12,349 dropped
 ************************************************************************
 
 end
 
 *--------------------------------SUMMARY STATS----------------------------------
-capture program drop sum
-program define sum
+capture program drop sum_stat
+program define sum_stat
 
 local a JK
 cd "${path_`a'}\output"
 
+*only employees in sample
 ******************RACE**********************************************************
 *graphs of pension membership/contributions by race
 preserve
@@ -82,7 +108,7 @@ foreach x in ownperc ownperc_cond pen_mem {
 	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
 	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
 
-	graph bar `x', over(raceb, label(angle(45))) ytitle("`ytitle'")
+	graph bar `x' if inrange(raceb,1,9), over(raceb, label(angle(45))) ytitle("`ytitle'")
 	graph export "`x'_race.pdf", replace
 }
 restore
@@ -97,7 +123,7 @@ foreach x in ageret retneed famcont{
     preserve
     keep if `x' >= 0
 	collapse (mean) `x' [pw=rxwgt], by(raceb)
-	graph bar `x', over(raceb, label(angle(45))) ytitle("`ytitle'")
+	graph bar `x' if inrange(raceb,1,9), over(raceb, label(angle(45))) ytitle("`ytitle'")
 	graph export "`x'_race.pdf", replace
 	restore
 }
@@ -109,7 +135,7 @@ use "usoc_clean.dta", clear
 local a JK
 cd "${path_`a'}\output"
 gen private = 0
-replace private = 1 if public == 0
+replace private = 1 if sector == 1
 gen self_employed = 0
 replace self_employed = 1 if sector == 0
 gen employee = 0
@@ -120,13 +146,13 @@ preserve
 keep if inlist(intyear,2010,2011,2012,2018,2019,2020)
 gen post_ae = 0
 replace post_ae = 1 if inlist(intyear,2018,2019,2020)
-foreach i in inwork public private self_employed employee{
+foreach i in inwork pub private self_employed employee{
 	replace `i' = `i'*100
 }
-collapse (mean) inwork public private self_employed employee [pw=rxwgt], by(raceb post_ae)
-drop if raceb == .
-reshape wide inwork public private self_employed employee, i(raceb) j(post_ae)
-foreach i in inwork public private self_employed employee{
+collapse (mean) inwork pub private self_employed employee [pw=rxwgt], by(raceb post_ae)
+drop if raceb == 10
+reshape wide inwork pub private self_employed employee, i(raceb) j(post_ae)
+foreach i in inwork pub private self_employed employee{
 	order `i'1, after(`i'0)
 }
 xpose, clear varname
@@ -134,15 +160,15 @@ order _varname
 drop if _varname == "raceb"
 replace _varname = "In Work (Pre)" if _varname == "inwork0"
 replace _varname = "In Work (Post)" if _varname == "inwork1"
-replace _varname = "Public (Pre)" if _varname == "public0"
-replace _varname = "Public (Post)" if _varname == "public1"
+replace _varname = "Public (Pre)" if _varname == "pub0"
+replace _varname = "Public (Post)" if _varname == "pub1"
 replace _varname = "Private (Pre)" if _varname == "private0"
 replace _varname = "Private (Post)" if _varname == "private1"
 replace _varname = "Self-Employed (Pre)" if _varname == "self_employed0"
 replace _varname = "Self-Employed (Post)" if _varname == "self_employed1"
 replace _varname = "Employee (Pre)" if _varname == "employee0"
 replace _varname = "Employee (Post)" if _varname == "employee1"
-format v1 v2 v3 v4 v5 v6 v7 v8 v9 v10 %12.1fc 
+format v1 v2 v3 v4 v5 v6 v7 v8 v9 %12.1fc 
 listtab using "job_vars_race_ae.tex", rstyle(tabular) replace
 restore
 
@@ -150,8 +176,37 @@ local a JK
 cd "${path_`a'}\data"
 use "usoc_clean.dta", clear
 keep if inlist(jb1status, 1, 2)
+drop if sector == 0
 local a JK
 cd "${path_`a'}\output"
+
+*% public in restricted sample - table
+preserve
+keep if inlist(intyear,2010,2011,2012,2018,2019,2020)
+gen post_ae = 0
+replace post_ae = 1 if inlist(intyear,2018,2019,2020)
+replace pub = pub*100
+
+collapse (mean) pub [pw=rxwgt], by(raceb post_ae)
+drop if raceb == 10
+reshape wide pub, i(raceb) j(post_ae)
+order pub1, after(pub0)
+xpose, clear varname
+order _varname
+drop if _varname == "raceb"
+replace _varname = "Public (Pre)" if _varname == "pub0"
+replace _varname = "Public (Post)" if _varname == "pub1"
+format v1 v2 v3 v4 v5 v6 v7 v8 v9 %12.1fc 
+listtab using "job_vars_1.tex", rstyle(tabular) replace
+restore
+
+
+*seeing distribution of how many waves an individual is in
+egen wavesum = count(intyear), by(pidp)
+histogram wavesum, di percent
+graph export "wavesum.pdf", replace
+
+*only employees in sample
 *********************************************************************************
 *graphs of pension membership/contributions by region
 preserve
@@ -198,7 +253,7 @@ foreach x in ownperc ownperc_cond pen_mem {
 }
 restore
 
-*table output of summary statistics by region, education [edgrpnew](highest qualification), health (long standing illness or disability)
+*table output of summary statistics by region, education [edgrpnew](highest qualification), health (long standing illness or disability) - employees only
 foreach i in region health edgrpnew raceb{
     preserve
 	tempfile `i'_t
@@ -217,7 +272,7 @@ label var category "Category"
 label var ownperc "Unconditional Contribution Rate"
 label var ownperc_cond " Conditional Contribution Rate"
 label var pen_mem "Membership Rate"
-drop if inlist(category, "region missing", "Missing", "Refused", "Dont know", "")
+drop if inlist(category, "region missing", "Missing", "missing", "Refused", "Dont know", "")
 replace category = "Health Problem" if category == "Yes"
 replace category = "No Health Problem" if category == "No"
 listtab using "pen_saving_by_groups_simple.tex", rstyle(tabular) replace
@@ -226,16 +281,17 @@ local a JK
 cd "${path_`a'}\data"
 use "usoc_clean.dta", clear
 keep if inlist(jb1status, 1, 2)
+drop if sector == 0
 local a JK
 cd "${path_`a'}\output"
 
-*creating a table of covariates by race
+*creating a table of covariates by race - employees only
 preserve
-foreach i in kid0 kid12 kid34 kid5ormore uni alevels gcse lessgcse jbsize1_24 jbsize25_199 jbsize200plus female couple married disability owned rent mort priv pub self priv_p pub_p self_p partner_inwork invinc0 invinc100to1k invinc1to100 invinc1kplus mar coupl divorce nev_mar{
+foreach i in kid0 kid12 kid34 kid5ormore uni alevels gcse lessgcse jbsize1_24 jbsize25_199 jbsize200plus female couple married disability owned rent mort priv pub priv_p pub_p self_p partner_inwork invinc0 invinc100to1k invinc1to100 invinc1kplus mar coupl divorce nev_mar{
 	replace `i' = `i'*100
 }
 keep if jbsize > 0
-collapse (mean) age real_earn kid0 kid12 kid34 kid5ormore uni alevels gcse lessgcse jbsize1_24 jbsize25_199 jbsize200plus priv pub self priv_p pub_p self_p female realpartearn owned rent mort hvalue disability partner_inwork saved invinc0 invinc1to100 invinc100to1k invinc1kplus mar coupl divorce nev_mar [pw=rxwgt], by(raceb)
+collapse (mean) age real_earn kid0 kid12 kid34 kid5ormore uni alevels gcse lessgcse jbsize1_24 jbsize25_199 jbsize200plus priv pub priv_p pub_p self_p female realpartearn owned rent mort hvalue disability partner_inwork saved invinc0 invinc1to100 invinc100to1k invinc1kplus mar coupl divorce nev_mar [pw=rxwgt], by(raceb)
 *order of table: individual vars, job vars, partner vars, wealth vars
 order partner_inwork realpartearn, after(self)
 order disability female, after(real_earn)
@@ -246,7 +302,7 @@ xpose, clear varname
 order _varname
 gen n=_n
 drop if n==1
-drop n v11
+drop n v10
 replace _varname = "Age" if _varname == "age"
 replace _varname = "Real Weekly Earnings" if _varname == "real_earn"
 replace _varname = "Percent With No Kids" if _varname == "kid0"
@@ -262,7 +318,6 @@ replace _varname = "Percent In Company With 25-199 Employees" if _varname == "jb
 replace _varname = "Percent In Company With 200+ Employees" if _varname == "jbsize200plus"
 replace _varname = "Percent Private Sector" if _varname == "priv"
 replace _varname = "Percent Public Sector" if _varname == "pub"
-replace _varname = "Percent Self-Employed" if _varname == "self"
 replace _varname = "Percent With Partner In Work" if _varname == "partner_inwork"
 replace _varname = "Percent Private Sector: Partner" if _varname == "priv_p"
 replace _varname = "Percent Public Sector: Partner" if _varname == "pub_p"
@@ -283,7 +338,7 @@ replace _varname = "Percent With No Annual Investment/Savings Income" if _varnam
 replace _varname = "Percent with Annual Investment/Savings Income of 1-100" if _varname == "invinc1to100"
 replace _varname = "Percent with Annual Investment/Savings Income of 100-1k" if _varname == "invinc100to1k"
 replace _varname = "Percent with Annual Investment/Savings Income of 1k+" if _varname == "invinc1kplus"
-format v1 v2 v3 v4 v5 v6 v7 v8 v9 v10 %12.1fc 
+format v1 v2 v3 v4 v5 v6 v7 v8 v9 %12.1fc 
 listtab using "covariates_by_race.tex", rstyle(tabular) replace
 restore
 *include in table notes: Education variables refer to the highest qualification an individual has achieved
@@ -325,31 +380,32 @@ foreach x in ownperc ownperc_cond pen_mem {
 	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
 	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
 	
-	twoway connected `x' age_dum if raceb == 1, ytitle("`ytitle'") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "White") lab(2 "Other White") lab(3 "Mixed") lab(4 "Indian") lab(5 "Pakistani") lab(6 "Bangladeshi") lab(7 "Other Asian") lab(8 "Caribbean") lab(9 "African") lab(10 "Other")) || connected `x' age_dum if raceb == 2 || connected `x' age_dum if raceb == 3 || connected `x' age_dum if raceb == 4 || connected `x' age_dum if raceb == 5 || connected `x' age_dum if raceb == 6 || connected `x' age_dum if raceb == 7 || connected `x' age_dum if raceb == 8 || connected `x' age_dum if raceb == 9  || connected `x' age_dum if raceb == 10
+	twoway connected `x' age_dum if raceb == 1, ytitle("`ytitle'") xlabel(0 "22-25" 1 "26-29" 2 "30-33" 3 "34-37" 4 "38-41" 5 "42-45" 6 "46-49" 7 "50-53" 8 "54-57" 9 "58-59", angle(45)) xtitle("Age Group") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Other Asian") lab(7 "Caribbean") lab(8 "African") lab(9 "Other")) || connected `x' age_dum if raceb == 2 || connected `x' age_dum if raceb == 3 || connected `x' age_dum if raceb == 4 || connected `x' age_dum if raceb == 5 || connected `x' age_dum if raceb == 6 || connected `x' age_dum if raceb == 7 || connected `x' age_dum if raceb == 8 || connected `x' age_dum if raceb == 9 
 	graph export "`x'_age_race.pdf", replace
 }
 restore
 
 *Checking distribution of age by ethnic group
-estpost tabstat age, by(raceb) statistics(count mean sd) columns(statistics) listwise
+preserve
+estpost tabstat age if raceb != 10, by(raceb) statistics(count mean sd) columns(statistics) listwise
 esttab using dist_age_race.tex, replace cell("count mean sd") noobs nonumber
 eststo clear
+restore
 
 kdensity age, nograph gen(x fx)
-forvalues i=1/10{
+forvalues i=1/9{
 	kdensity age if raceb == `i', nograph gen(fx`i') at(x)
 }
 label var fx1 "White"
-label var fx2 "Other White"
-label var fx3 "Mixed"
-label var fx4 "Indian"
-label var fx5 "Pakistani"
-label var fx6 "Bangladeshi"
-label var fx7 "Other Asian"
-label var fx8 "Caribbean"
-label var fx9 "African"
-label var fx10 "Other"
-line fx1 fx2 fx3 fx4 fx5 fx6 fx7 fx8 fx9 fx10 x, sort ytitle(Density)
+label var fx2 "Mixed"
+label var fx3 "Indian"
+label var fx4 "Pakistani"
+label var fx5 "Bangladeshi"
+label var fx6 "Other Asian"
+label var fx7 "Caribbean"
+label var fx8 "African"
+label var fx9 "Other"
+line fx1 fx2 fx3 fx4 fx5 fx6 fx7 fx8 fx9 x, sort ytitle(Density)
 graph export "dens_age_race.pdf", replace
 
 *Creating a table of age by race
@@ -384,6 +440,10 @@ listtab using "age_by_race.tex", rstyle(tabular) replace
 local a JK
 cd "${path_`a'}\data"
 use "usoc_clean.dta", clear
+keep if inlist(jb1status, 1, 2)
+drop if sector == 0
+local a JK
+cd "${path_`a'}\output"
 
 *creating a second table with different aggregation
 forvalues i=0/3{
@@ -411,6 +471,8 @@ listtab using "age_by_race_1.tex", rstyle(tabular) replace
 local a JK
 cd "${path_`a'}\data"
 use "usoc_clean.dta", clear
+keep if inlist(jb1status, 1, 2)
+drop if sector == 0
 local a JK
 cd "${path_`a'}\output"
 
@@ -564,7 +626,7 @@ foreach x in ownperc ownperc_cond pen_mem {
 	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
 	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
 	
-	twoway connected `x' intyear if raceb == 1, ytitle("`ytitle'") legend(lab(1 "White") lab(2 "Other White") lab(3 "Mixed") lab(4 "Indian") lab(5 "Pakistani") lab(6 "Bangladeshi") lab(7 "Other Asian") lab(8 "Caribbean") lab(9 "African") lab(10 "Other")) || connected `x' intyear if raceb == 2 || connected `x' intyear if raceb == 3 || connected `x' intyear if raceb == 4 || connected `x' intyear if raceb == 5 || connected `x' intyear if raceb == 6 || connected `x' intyear if raceb == 7 || connected `x' intyear if raceb == 8 || connected `x' intyear if raceb == 9  || connected `x' intyear if raceb == 10
+	twoway connected `x' intyear if raceb == 1, ytitle("`ytitle'") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Other Asian") lab(7 "Caribbean") lab(8 "African") lab(9 "Other")) || connected `x' intyear if raceb == 2 || connected `x' intyear if raceb == 3 || connected `x' intyear if raceb == 4 || connected `x' intyear if raceb == 5 || connected `x' intyear if raceb == 6 || connected `x' intyear if raceb == 7 || connected `x' intyear if raceb == 8 || connected `x' intyear if raceb == 9
 	graph export "`x'_time_race.pdf", replace
 }
 restore
@@ -579,7 +641,7 @@ foreach x in ownperc ownperc_cond pen_mem {
 	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
 	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
 	
-	twoway connected `x' intyear if raceb == 1 & inrange(intyear,2010,2019), ytitle("`ytitle'") xtitle("Year")  legend(lab(1 "White") lab(2 "Pakistani") lab(3 "Bangladeshi")) || connected `x' intyear if raceb == 5 || connected `x' intyear if raceb == 6 
+	twoway connected `x' intyear if raceb == 1 & inrange(intyear,2010,2019), ytitle("`ytitle'") xtitle("Year")  legend(lab(1 "White") lab(2 "Pakistani") lab(3 "Bangladeshi")) || connected `x' intyear if raceb == 4 || connected `x' intyear if raceb == 5
 	graph export "`x'_time_race_detail.pdf", replace
 }
 restore
@@ -623,12 +685,6 @@ program define earn_trends
 
 local a JK
 cd "${path_`a'}\output"
-
-gen earn_dum = .
-replace earn_dum = 1 if inrange(jb1earn, 0,500)
-replace earn_dum = 2 if jb1earn > 500 & jb1earn <= 1000
-replace earn_dum = 3 if jb1earn >1000
-label define earn_dum 1 "0-500" 2 "500-1000" 3 "1000+" 
 
 **************************HEALTH******************************************
 preserve
@@ -681,14 +737,14 @@ foreach x in ownperc ownperc_cond pen_mem {
 	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
 	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
 	
-	binscatter `x' real_earn,  by(raceb) nquantiles(10) ytitle("`ytitle'") xtitle("Real Weekly Earnings (£)") legend(lab(1 "White") lab(2 "Other White") lab(3 "Mixed") lab(4 "Indian") lab(5 "Pakistani") lab(6 "Bangladeshi") lab(7 "Other Asian") lab(8 "Caribbean") lab(9 "African") lab(10 "Other")) line(connect)
+	binscatter `x' real_earn if raceb != 10,  by(raceb) nquantiles(10) ytitle("`ytitle'") xtitle("Real Weekly Earnings (£)") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Other Asian") lab(7 "Caribbean") lab(8 "African") lab(9 "Other")) line(connect)
 	graph export "`x'_inc_race_bin.pdf", replace
 }
 restore
 
 *Binscatter for key groups
 preserve
-keep if inlist(raceb,1,5,6)
+keep if inlist(raceb,1,4,5)
 foreach x in ownperc ownperc_cond pen_mem {
     
 	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
@@ -705,23 +761,24 @@ restore
 *distribution of earnings by race
 
 kdensity real_earn, nograph gen(d fd)
-forvalues i=1/10{
+forvalues i=1/9{
 	kdensity real_earn if raceb == `i', nograph gen(fd`i') at(d)
 }
 label var fd1 "White"
-label var fd2 "Other White"
-label var fd3 "Mixed"
-label var fd4 "Indian"
-label var fd5 "Pakistani"
-label var fd6 "Bangladeshi"
-label var fd7 "Other Asian"
-label var fd8 "Caribbean"
-label var fd9 "African"
-label var fd10 "Other"
-line fd1 fd2 fd3 fd4 fd5 fd6 fd7 fd8 fd9 fd10 d if inrange(d,-200,2500), sort ytitle(Density) xtitle(Real Earnings)
+label var fd2 "Mixed"
+label var fd3 "Indian"
+label var fd4 "Pakistani"
+label var fd5 "Bangladeshi"
+label var fd6 "Other Asian"
+label var fd7 "Caribbean"
+label var fd8 "African"
+label var fd9 "Other"
+line fd1 fd2 fd3 fd4 fd5 fd6 fd7 fd8 fd9 d if inrange(d,-200,2500), sort ytitle(Density) xtitle(Real Weekly Earnings)
 graph export "dens_inc_race.pdf", replace
 
-graph hbox real_earn, over(raceb) nooutsides ytitle("Real Weekly Earnings")
+
+*NOTE: whiskers set to 1.5*Interquartile_range
+graph hbox real_earn if raceb != 10, over(raceb) nooutsides ytitle("Real Weekly Earnings")
 graph export "box_earn_race.pdf", replace
 
 **************************EDUCATION***********************************************
@@ -830,15 +887,15 @@ cd "${path_`a'}\output"
 *------------------------HEALTH-------------------------------------------------
 foreach x in ownperc ownperc_cond pen_mem {
 	
-	eststo: oaxaca `x' age [pw=rxwgt] if inrange(health,1,2) & jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu), by(health) pooled
+	eststo: oaxaca `x' age [pw=rxwgt] if inrange(health,1,2), by(health) pooled
 	
-	eststo: oaxaca `x' age agesq intyear lnrealearn [pw=rxwgt] if inrange(health,1,2) & jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu), by(health) pooled 
+	eststo: oaxaca `x' age agesq intyear lnrealearn [pw=rxwgt] if inrange(health,1,2), by(health) pooled 
 	
-	eststo: oaxaca age agesq intyear lnrealearn sector jbsize industry occupation [pw=rxwgt] if inrange(health,1,2) & jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu), by(health) pooled 
+	eststo: oaxaca age agesq intyear lnrealearn sector jbsize industry occupation [pw=rxwgt] if inrange(health,1,2), by(health) pooled 
 	
-	eststo: oaxaca `x' age agesq intyear lnrealearn sector jbsize industry occupation edgrpnew region female kidnum raceb  [pw=rxwgt] if inrange(health,1,2) & jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu), by(health) pooled 
+	eststo: oaxaca `x' age agesq intyear lnrealearn sector jbsize industry occupation edgrpnew region female kidnum raceb  [pw=rxwgt] if inrange(health,1,2), by(health) pooled 
 	
-	eststo: oaxaca `x' age agesq intyear lnrealearn sector jbsize industry occupation edgrpnew region female kidnum raceb married partner_edu lnrealpartearn partner_sector [pw=rxwgt] if inrange(health,1,2) & jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu), by(health) pooled 
+	eststo: oaxaca `x' age agesq intyear lnrealearn sector jbsize industry occupation edgrpnew region female kidnum raceb married partner_edu lnrealpartearn partner_sector [pw=rxwgt] if inrange(health,1,2), by(health) pooled 
 	
 	esttab using `x'_oax_health.tex, se replace booktabs nodepvars nomtitles coeflabels(group_1 "Health Condition" group_2 "No Health Condition" difference "Difference" explained "Explained" unexplained "Unexplained") drop(unexplained:* explained:*)
 	eststo clear
@@ -873,53 +930,52 @@ Controls 4: other individual variables
 Controls 5: partner variables
 Controls 6: housing costs
 */
-
 **********REGION**********************************
 foreach x in ownperc ownperc_cond pen_mem {
 	
-	eststo: reg `x' i.region [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region)  & !missing(raceb) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.region [pw=rxwgt]
 	estadd local cont_1 "No"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.region age agesq i.intyear [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(raceb) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.region age agesq i.intyear [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.region age agesq i.intyear lnrealearn [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(raceb) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.region age agesq i.intyear lnrealearn [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.region age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(raceb) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.region age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.region age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.raceb i.female i.health i.kidnum [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.region age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.raceb i.female i.health i.kidnum [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.region age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.raceb i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.region age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.raceb i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector [pw=rxwgt] 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.region age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.raceb i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(raceb) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.region age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.raceb i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
@@ -931,58 +987,64 @@ foreach x in ownperc ownperc_cond pen_mem {
 }
 
 ***********************RACE*********************************
+/*foreach var of varlist raceb age agesq intyear lnrealearn sector jbsize industry occupation parttime edgrpnew  region female health kidnum married partner_edu lnrealpartearn partner_sector housecost_win ownperc ownperc_cond pen_mem{
+	qui count if missing(`var') | `var' < 0
+	di "`var': `r(N)'"
+}
+*/
+*clustering standard errors in regression at individual level
 foreach x in ownperc ownperc_cond pen_mem {
 	
-	eststo: reg `x' i.raceb [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "No"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector  [pw=rxwgt], vce(cluster pidp) 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp) 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)  
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "Yes"
-	esttab using `x'_reg_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	esttab using `x'_reg_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
 	eststo clear
 }
 
@@ -990,49 +1052,49 @@ foreach x in ownperc ownperc_cond pen_mem {
 *university degree is base 
 foreach x in ownperc ownperc_cond pen_mem {
 	
-	eststo: reg `x' ib5.edgrpnew [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(raceb) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' ib5.edgrpnew [pw=rxwgt]
 	estadd local cont_1 "No"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' ib5.edgrpnew age agesq i.intyear [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' ib5.edgrpnew age agesq i.intyear [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnrealearn [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnrealearn [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.region i.female i.health i.kidnum i.raceb [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.region i.female i.health i.kidnum i.raceb [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.region i.female i.health i.kidnum i.raceb i.married i.partner_edu lnrealpartearn i.partner_sector [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.region i.female i.health i.kidnum i.raceb i.married i.partner_edu lnrealpartearn i.partner_sector [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "No"
-	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.region i.female i.health i.kidnum i.raceb i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(raceb) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' ib5.edgrpnew age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.region i.female i.health i.kidnum i.raceb i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
@@ -1053,42 +1115,42 @@ foreach x in ownperc ownperc_cond pen_mem {
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.health age agesq i.intyear [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.health age agesq i.intyear [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.health age agesq i.intyear lnrealearn [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.health age agesq i.intyear lnrealearn [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.health age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(raceb) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.health age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.health age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.region i.female i.kidnum i.raceb [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu)  
+	eststo: reg `x' i.health age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.region i.female i.kidnum i.raceb [pw=rxwgt] 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.health age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.region i.female i.kidnum i.raceb i.married i.partner_edu lnrealpartearn i.partner_sector [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.health age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.region i.female i.kidnum i.raceb i.married i.partner_edu lnrealpartearn i.partner_sector [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.health age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.region i.female i.kidnum i.raceb i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(raceb) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.health age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.region i.female i.kidnum i.raceb i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt]
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
@@ -1111,56 +1173,55 @@ keep if inlist(intyear,2010,2011,2012)
 
 foreach x in ownperc ownperc_cond pen_mem {
 	
-	eststo: reg `x' i.raceb [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "No"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
-	estadd local cont_1 "Yes"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "Yes"
-	esttab using `x'_preae_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	esttab using `x'_preae_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
 	eststo clear
 }
 restore
@@ -1171,56 +1232,56 @@ keep if inlist(intyear,2018,2019,2020)
 
 foreach x in ownperc ownperc_cond pen_mem {
 	
-	eststo: reg `x' i.raceb [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "No"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector[pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp) 
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "Yes"
-	esttab using `x'_postae_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	esttab using `x'_postae_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
 	eststo clear
 }
 restore
@@ -1232,11 +1293,11 @@ foreach x in ownperc ownperc_cond pen_mem{
 	if "`x'" == "ownperc" local ytitle "Uncond. Cont."
 	else if "`x'" == "ownperc_cond" local ytitle "Cond. Cont."
 	
-	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) & inlist(intyear,2010,2011,2012)
+	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if inlist(intyear,2010,2011,2012), vce(cluster pidp)
 	estimates store pre
-	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(female) & !missing(partner_sector) & !missing(partner_edu) & inlist(intyear,2018,2019,2020)
+	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if inlist(intyear,2018,2019,2020), vce(cluster pidp)
 	estimates store post
-	coefplot (pre, label(Pre AE)) (post, label(Post AE)), drop(_cons 1.raceb) xlabel(,angle(45)) ytitle("Point Estimate (`ytitle')") keep(*.raceb) yline(0) vertical
+	coefplot (pre, label(Pre AE)) (post, label(Post AE)), drop(_cons 1.raceb 10.raceb) xlabel(,angle(45)) ytitle("Point Estimate (`ytitle')") keep(*.raceb) yline(0) vertical
 	graph export "`x'_coefplot_AE_race.pdf", replace
 }
 
@@ -1253,56 +1314,56 @@ keep if female == 0
 
 foreach x in ownperc ownperc_cond pen_mem {
 	
-	eststo: reg `x' i.raceb [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "No"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "Yes"
-	esttab using `x'_male_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	esttab using `x'_male_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
 	eststo clear
 }
 restore
@@ -1313,56 +1374,56 @@ keep if female == 1
 
 foreach x in ownperc ownperc_cond pen_mem {
 	
-	eststo: reg `x' i.raceb [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "No"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "No"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "No"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "No"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "No"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) 
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp)
 	estadd local cont_1 "Yes"
 	estadd local cont_2 "Yes"
 	estadd local cont_3 "Yes"
 	estadd local cont_4 "Yes"
 	estadd local cont_5 "Yes"
 	estadd local cont_6 "Yes"
-	esttab using `x'_female_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	esttab using `x'_female_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
 	eststo clear
 }
 restore
@@ -1374,14 +1435,501 @@ foreach x in ownperc ownperc_cond pen_mem{
 	if "`x'" == "ownperc" local ytitle "Uncond. Cont."
 	else if "`x'" == "ownperc_cond" local ytitle "Cond. Cont."
 	
-	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) & female == 0
+	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if female == 0, vce(cluster pidp)
 	estimates store male
-	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if jbsize > 0 & !missing(sector) & !missing(occupation) & !missing(industry) & health > 0 & !missing(edgrpnew) & !missing(region) & !missing(partner_sector) & !missing(partner_edu) & female == 1
+	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if female == 1, vce(cluster pidp)
 	estimates store female
-	coefplot (male, label(Male)) (female, label(Female)), drop(_cons 1.raceb) xlabel(,angle(45)) ytitle("Point Estimate (`ytitle')") keep(*.raceb) yline(0) vertical
+	coefplot (male, label(Male)) (female, label(Female)), drop(_cons 1.raceb 10.raceb) xlabel(,angle(45)) ytitle("Point Estimate (`ytitle')") keep(*.raceb) yline(0) vertical
 	graph export "`x'_coefplot_sex_race.pdf", replace
 }
 
 end
 
+*-----------------------------ELIGIBLE EMPLOYEES ONLY---------------------------
+capture program drop eligible_employ
+program define eligible_employ
 
+local a JK
+cd "${path_`a'}\data"
+use "usoc_clean.dta", clear
+keep if inlist(jb1status, 1, 2)
+drop if sector == 0
+keep if annual_dum == 1 //only those affected by AE
+local a JK
+cd "${path_`a'}\output"
+
+foreach x in ownperc ownperc_cond pen_mem {
+	
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "No"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp) 
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)  
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "Yes"
+	esttab using `x'_reg_race_eligible.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	eststo clear
+}
+
+
+********************************************************************************
+
+preserve
+keep if inlist(intyear,2010,2011,2012)
+
+foreach x in ownperc ownperc_cond pen_mem {
+	
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "No"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp) 
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "Yes"
+	esttab using `x'_eligible.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	eststo clear
+}
+restore
+
+*regression post
+preserve
+keep if inlist(intyear,2018,2019,2020)
+
+foreach x in ownperc ownperc_cond pen_mem {
+	
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "No"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp) 
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "Yes"
+	esttab using `x'_postae_race_eligible.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	eststo clear
+}
+restore
+
+*PLOTTING ESTIMATES OF MODEL WITH ALL CONTROLS
+foreach x in ownperc ownperc_cond pen_mem{
+	
+	if "`x'" == "pen_mem" local ytitle "Membership"
+	if "`x'" == "ownperc" local ytitle "Uncond. Cont."
+	else if "`x'" == "ownperc_cond" local ytitle "Cond. Cont."
+	
+	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if inlist(intyear,2010,2011,2012), vce(cluster pidp)
+	estimates store pre
+	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if inlist(intyear,2018,2019,2020), vce(cluster pidp)
+	estimates store post
+	coefplot (pre, label(Pre AE)) (post, label(Post AE)), drop(_cons 1.raceb 10.raceb) xlabel(,angle(45)) ytitle("Point Estimate (`ytitle')") keep(*.raceb) yline(0) vertical
+	graph export "`x'_coefplot_AE_race_eligible.pdf", replace
+}
+
+preserve
+drop if intyear == 2020
+collapse (mean) ownperc ownperc_cond pen_mem [pw=rxwgt], by(intyear raceb)
+foreach x in ownperc ownperc_cond pen_mem {
+    
+	if "`x'" == "pen_mem" local ytitle "Membership Rate (%)"
+	if "`x'" == "ownperc" local ytitle "Unconditional Contribution Rate (%)"
+	else if "`x'" == "ownperc_cond" local ytitle "Conditional Contribution Rate (%)"
+	
+	twoway connected `x' intyear if raceb == 1 & inrange(intyear,2010,2019), ytitle("`ytitle'") xtitle("Year")  legend(lab(1 "White") lab(2 "Pakistani") lab(3 "Bangladeshi")) || connected `x' intyear if raceb == 4 || connected `x' intyear if raceb == 5
+	graph export "`x'_time_race_detail_eligible.pdf", replace
+}
+restore
+
+
+*****************Pre/post AE by sex*********************************************
+******MEN**************
+*pre
+preserve
+keep if female == 0
+keep if inlist(intyear,2010,2011,2012)
+
+foreach x in ownperc ownperc_cond pen_mem {
+	
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "No"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp) 
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "Yes"
+	esttab using `x'_preae_men_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	eststo clear
+}
+restore
+
+*post
+preserve
+keep if female == 0
+keep if inlist(intyear,2018,2019,2020)
+
+foreach x in ownperc ownperc_cond pen_mem {
+	
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "No"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp) 
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "Yes"
+	esttab using `x'_postae_men_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	eststo clear
+}
+restore
+
+******WOMEN**************
+*pre
+preserve
+keep if female == 1
+keep if inlist(intyear,2010,2011,2012)
+
+foreach x in ownperc ownperc_cond pen_mem {
+	
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "No"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp) 
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "Yes"
+	esttab using `x'_preae_women_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	eststo clear
+}
+restore
+
+*post
+preserve
+keep if female == 1
+keep if inlist(intyear,2018,2019,2020)
+
+foreach x in ownperc ownperc_cond pen_mem {
+	
+	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "No"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "No"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "No"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "No"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "No"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "No"
+	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt], vce(cluster pidp) 
+	estadd local cont_1 "Yes"
+	estadd local cont_2 "Yes"
+	estadd local cont_3 "Yes"
+	estadd local cont_4 "Yes"
+	estadd local cont_5 "Yes"
+	estadd local cont_6 "Yes"
+	esttab using `x'_postae_women_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
+	eststo clear
+}
+restore
+
+
+*PLOTTING COEFICIENT ESTIMATES FOR PRE/POST BY SEX
+foreach x in ownperc ownperc_cond pen_mem{
+	
+	if "`x'" == "pen_mem" local ytitle "Membership"
+	if "`x'" == "ownperc" local ytitle "Uncond. Cont."
+	else if "`x'" == "ownperc_cond" local ytitle "Cond. Cont."
+	
+	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if inlist(intyear,2010,2011,2012) & female == 0, vce(cluster pidp)
+	estimates store pre_men
+	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if inlist(intyear,2018,2019,2020) & female == 0, vce(cluster pidp)
+	estimates store post_men
+	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if inlist(intyear,2010,2011,2012) & female == 1, vce(cluster pidp)
+	estimates store pre_women
+	qui reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win [pw=rxwgt] if inlist(intyear,2018,2019,2020) & female == 1, vce(cluster pidp)
+	estimates store post_women
+	coefplot (pre_men, label(Pre AE)) (post_men, label(Post AE)) || (pre_women, label(Pre AE)) (post_women, label(Post AE)), drop(_cons 1.raceb 10.raceb) xlabel(,angle(45)) ytitle("Point Estimate (`ytitle')") keep(*.raceb) yline(0) vertical bylabels("Men" "Women")
+	graph export "`x'_coefplot_AE_sex.pdf", replace
+}
+
+
+end
