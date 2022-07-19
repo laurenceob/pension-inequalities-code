@@ -67,6 +67,7 @@ program define clean_ff_vars
 	replace wave = wave - 18
 	ren racel racel_bhps
 	append using "$workingdata/usoc_extracted"
+	append using "$workingdata/usoc_extracted_wave8"
 	append using "$workingdata/usoc_wave1"
 	egen double max_pidp = max(pidp) if !missing(pid), by(pid)
 	assert pidp == max_pidp if wave > 0 & !missing(pid) // check that pidp doesn't vary within pid 
@@ -89,10 +90,22 @@ program define clean_ff_vars
 	label values raceb racelab1
 	drop race racel_bhps
 	
+	* Try and make consistent UK-born variable 
+	gen bornuk = (inrange(ukborn, 1, 4)) if inrange(ukborn, 1, 5)
+	replace bornuk = 1 if inrange(plbornd, 1, 368)
+	replace bornuk = 0 if inrange(plbornc, 6, 92)
+	
 	* Copy forward education level and race
 	sort pidp wave
 	by pidp (wave): replace edgrpnew = edgrpnew[_n-1] if missing(edgrpnew)
 	by pidp (wave): replace raceb = raceb[_n-1] if missing(raceb) // still missing sometimes but better
+	by pidp (wave): replace bornuk = bornuk[_n-1] if missing(bornuk) 
+	
+	* Sort out missings for bornuk 
+	replace bornuk = 2 if missing(bornuk)
+	label define bornuk 0 "Not born in UK" 1 "Born in UK" 2 "Missing"
+	label values bornuk bornuk
+	drop ukborn plbornd plbornc ff_ukborn
 	
 	cap label drop edgrpnew
 	label define edgrpnew 0 "None of the above qualifications" 1 "Less than GCSEs" 2 "GCSEs" 3 "A-levels" ///
@@ -211,7 +224,49 @@ program define clean_pension_vars
 	gen ownperc_cond = ownperc if jbpenm == 1
 	label var ownperc_cond "Employee contribution rate, workplace pension members only"
 	
+	/********** Personal pensions **********/
+	
+	* Participation
+	gen pers_pen = ppen if !missing(ppen)
+	replace pers_pen = 0 if inlist(ppreg, 1, 3, 4)
+	// For now, say only people who regularly contribute are personal pension "participants"
+	label variable pers_pen "Whether regularly contribute to a personal pension"
+	label define pers_pen 0 "Don't regularly contribute to a personal pension" ///
+		1 "Regularly contribute to a personal pension"
+	label values pers_pen pers_pen 
+	
+	* Weekly contributions 
+	* First need to edit the variable saying the number of weeks the contribution covers 
+	gen pers_cont_period = pprampc
+	replace pers_cont_period = 52/12 if pprampc == 5 // calendar month 
+	replace pers_cont_period = 52/6  if pprampc == 7 // two calendar months 
+	replace pers_cont_period = . if inlist(pprampc, 95, 96) // one off / lump sum
 
+	gen pers_cont_week = ppram / pers_cont_period if !missing(pprampc, ppram)
+	
+	* Personal pension contributions as a percent of earnings - what to do about people not in work? 
+	gen pers_cont_perc = 100 * (pers_cont_week / jb1earn)
+	// ok there are some outliers here so i'm winsorising it 
+	sum pers_cont_perc, d
+	replace pers_cont_perc = r(p95) if pers_cont_perc >= r(p95) & !missing(pers_cont_perc)
+	replace pers_cont_perc = 0 if pers_pen == 0
+	
+	/********** Aggregating personal and workplace pensions together **********/
+	
+	* Participation
+	gen in_pension = 1 if pers_pen == 1 | jbpenm == 1
+	replace in_pension = 0 if pers_pen == 0 & (jbpenm == 0 | jb1status != 1)
+	
+	* Contributions 
+	gen pens_contr = ownperc + pers_cont_perc
+	assert pens_contr == 0 if in_pension == 0 
+	assert missing(pens_contr) if missing(ownperc) | missing(pers_cont_perc)
+	
+	gen pens_contr_cond = pens_contr if in_pension == 1
+	
+	
+	
+	
 end
 
 capture program drop clean_circumstance_vars 

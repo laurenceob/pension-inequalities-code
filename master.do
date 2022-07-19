@@ -20,7 +20,7 @@ global graphconfig "graphregion(color(white)) bgcolor(white)"
 
 **** Run project programs ****
 
-*do "$code/extract_usoc"  // extracts a dataset with pension variables using the USoc Extractor
+do "$code/extract_usoc"  // extracts a dataset with pension variables using the USoc Extractor
 do "$code/clean_usoc" 
 main // clean the extracted dataset 
 do "$code/analysis_usoc"
