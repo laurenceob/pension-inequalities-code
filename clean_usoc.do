@@ -250,6 +250,7 @@ program define clean_pension_vars
 	sum pers_cont_perc, d
 	replace pers_cont_perc = r(p95) if pers_cont_perc >= r(p95) & !missing(pers_cont_perc)
 	replace pers_cont_perc = 0 if pers_pen == 0
+	drop ppen ppreg pprampc ppram 
 	
 	/********** Aggregating personal and workplace pensions together **********/
 	
@@ -258,10 +259,10 @@ program define clean_pension_vars
 	replace in_pension = 0 if pers_pen == 0 & (jbpenm == 0 | jb1status != 1)
 	
 	* Contributions 
+	replace ownperc = 0 if jbpenm == 0 | jb1status != 1
 	gen pens_contr = ownperc + pers_cont_perc
 	assert pens_contr == 0 if in_pension == 0 
 	assert missing(pens_contr) if missing(ownperc) | missing(pers_cont_perc)
-	
 	gen pens_contr_cond = pens_contr if in_pension == 1
 	
 	
