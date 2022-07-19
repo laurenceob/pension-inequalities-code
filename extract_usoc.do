@@ -10,12 +10,12 @@
 /************* EXTRACTOR *************/
 /*************************************/
 
-* Main dataset
+* Main dataset (except wave 8 because ff_ukborn isn't in it for some reason)
 # delimit ;
 
 usextract using "$workingdata/usoc_extracted",
 		
-	waves(2(1)10)
+	waves(2 3 4 5 6 7 9 10)
 			
 
 	/* hhresp */
@@ -73,12 +73,100 @@ usextract using "$workingdata/usoc_extracted",
 		jbpen(jbpen)
 		jbpenm(jbpenm)
 		pentype(pentype)
-		ownperc(ownperc)
+		ownperc(ownperc) 
+		ppen(ppen)
+		ppreg(ppreg)
+		ppram(ppram)
+		pprampc(pprampc) 
 		rawvars(sex hidp pno pidp jbterm1 jbsect jbsectpub jbsize 
 				jbsic07_cc jbsoc00_cc j2pay_dv marstat_dv samejob
 				ndepchl_dv jbsamr mstatsam mstatsamn lwwrong empchk racel 
 				health ageret retamt retsuf rtfnd1 rtfnd2 rtfnd3 rtfnd4 rtfnd5 
-				rtfnd6 rtfnd7 rtfnd8 rtfnd9 rtfnd10 rtfnd96)
+				rtfnd6 rtfnd7 rtfnd8 rtfnd9 rtfnd10 rtfnd96 ff_ukborn ukborn)
+		mindic
+		
+	)
+	
+	keepindwoiv
+	
+	replace
+
+	; 
+
+# delimit cr
+
+# delimit ;
+
+usextract using "$workingdata/usoc_extracted_wave8",
+		
+	waves(8)
+			
+
+	/* hhresp */
+	hhrespoptions(
+		hhintdate(hhintdate)
+		hhrxwgt(hhrxwgt)
+		ivfho(ivfho)
+		hvalue(hvalue)
+		tenure(tenure)
+		totmortgage(totmortgage)
+		monthlymortgage(monthlymortgage)
+		rawvars(hidp tenure_dv rent_dv houscost1_dv houscost2_dv)
+		mindic
+	)
+
+	/* indall */
+	indalloptions(
+		age(age)
+		depkid(depkid)
+		female(female)
+		couple(couple)
+		married(married)
+		/*ptrpid(ptrpid)*/
+		numkids(numkids)
+		kidage(kidage)
+		parentinhh(parentinhh)
+		rawvars(sex hidp buno_dv pno pidp ppno)
+		mindic
+	)
+	
+	/* indresp */
+	indrespoptions(
+		edgrpnew(edgrpnew)
+		agesch(agesch(agesch) schstill(schstill))
+		intdate(intdate(intdate) intyear(intyear) intmonth(intmonth))
+		mover(mover)
+		rxwgt(rxwgt)
+		ivfio(ivfio)
+		gor(region)
+		econstat(econstat)
+		jb1start(jb1startd(jb1startd) jb1startm(jb1startm) jb1starty(jb1starty))
+		jb1status(jb1status)
+		jb2status(jb2status)
+		jb1tenure(jb1tenure)
+		earndate(earndate(earndate) earnmth(earnmth) earnyear(earnyear))
+		jb1earn(jb1earn(jb1earn) jb1earni(jb1earni))
+		jb1wage(jb1wage(jb1wage))
+		nonlabinc(nonlabinc)
+		jb1hrs(jb1hrs)
+		jb1hrsot(jb1hrsot)
+		saved(saved)
+		invinc(invinc)
+		ltwgt_ub(ltwgt_ub)
+		ltwgt_ui(ltwgt_ui)
+		jbpen(jbpen)
+		jbpenm(jbpenm)
+		pentype(pentype)
+		ownperc(ownperc) 
+		ppen(ppen)
+		ppreg(ppreg)
+		ppram(ppram)
+		pprampc(pprampc) 
+		rawvars(sex hidp pno pidp jbterm1 jbsect jbsectpub jbsize 
+				jbsic07_cc jbsoc00_cc j2pay_dv marstat_dv samejob
+				ndepchl_dv jbsamr mstatsam mstatsamn lwwrong empchk racel 
+				health ageret retamt retsuf rtfnd1 rtfnd2 rtfnd3 rtfnd4 rtfnd5 
+				rtfnd6 rtfnd7 rtfnd8 rtfnd9 rtfnd10 rtfnd96 ukborn)
 		mindic
 		
 	)
@@ -92,7 +180,7 @@ usextract using "$workingdata/usoc_extracted",
 # delimit cr
 
 * Get other variables that are fed forward from different waves 
- # delimit ;
+# delimit ;
 
     bhpsextract	using "$workingdata/bhps_constant_vars1",
 		waves(1(1)12)
@@ -105,7 +193,7 @@ usextract using "$workingdata/usoc_extracted",
 			jb1tenure(jb1tenure)
 			intdate(intdate(intdate) intyear(intyear) intmonth(intmonth))
 			spellstart(startday(startday) startmonth(startmonth) startyear(startyear))
-			rawvars(sex hid pno pid race)
+			rawvars(sex hid pno pid race plbornc plbornd)
 			mindic
 		)
 		replace;
@@ -124,7 +212,7 @@ usextract using "$workingdata/usoc_extracted",
 			jb1tenure(jb1tenure)
 			intdate(intdate(intdate) intyear(intyear) intmonth(intmonth))
 			spellstart(startday(startday) startmonth(startmonth) startyear(startyear))
-			rawvars(sex hid pno pid racel)
+			rawvars(sex hid pno pid racel plbornc plbornd)
 			mindic
 		)
 		replace;
@@ -144,7 +232,7 @@ usextract using "$workingdata/usoc_wave1",
 		jb1status(jb1status)
 		jb1start(jb1startd(jb1startd) jb1startm(jb1startm) jb1starty(jb1starty))
 		jb1tenure(jb1tenure)
-		rawvars(sex hidp pno pidp racel)
+		rawvars(sex hidp pno pidp racel ukborn)
 		
 	)
 
