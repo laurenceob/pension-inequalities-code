@@ -455,8 +455,8 @@ program define clean_job_vars
 
 	* Make a simpler public sector variable (similar to ASHE) -  this is missing for self-employed
 	gen public = .
-	replace public = 1 if inlist(jbsectpub, 1, 2, 3, 4, 6, 8)
-	replace public = 0 if jbsect == 1 | inlist(jbsectpub, 5, 7, 9)
+	replace public = 1 if inlist(jbsectpub, 2, 3, 4, 6, 8)
+	replace public = 0 if jbsect == 1 | inlist(jbsectpub, 1, 5, 7, 9)
 	label define public 0 "Private" 1 "Public" 
 	label values public public
 	label var public "Sector - public vs private vs other. Employees only"
