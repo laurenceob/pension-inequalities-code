@@ -29,7 +29,6 @@ program define main
 
 end
 
-
 *-----------------------------------STARTUP-------------------------------------
 capture program drop start
 program define start
@@ -49,7 +48,7 @@ ssc install coefplot
 *setting working directory
 global path_JK "P:\JPI_PENSINEQ\Inequalities\Summer_student\analysis" 
 end
-
+*----------------------------------MAIN ANALYSIS--------------------------------
 capture program drop analysis_race
 program define analysis_race
 
@@ -60,8 +59,9 @@ local a JK
 cd "${path_`a'}\output"
 keep if inlist(jb1status, 1, 2) //drops those who are unemployed; 28,605 dropped
 replace in_pension = in_pension*100 
+
 ********************************************************************************
-***GRAPHS OF PENSION PARTICIPATION/CONT. RATES (pooled, employees) 
+***GRAPHS OF PENSION PARTICIPATION/CONT. RATES (not used anymore)
 preserve
 collapse (mean) in_pension pens_contr pens_contr_cond [pw=rxwgt], by(raceb)
 format in_pension pens_contr pens_contr_cond %3.2f 
@@ -122,7 +122,64 @@ collapse (mean) dum*  [pw=rxwgt], by(postae)
 export excel "powerpoint_data.xlsx", firstrow(var) sheet("racecount_pop") sheetreplace
 restore
 
+********************************************************************************
+*Table/graph for %offered by race for eligible employees
+preserve
+replace jbpen = jbpen*100
+gen eligible = 0 
+replace eligible = 100 if annual_dum == 1 & inrange(sector,1,2)
+gen preae = 0
+replace preae = 1 if inlist(intyear, 2010, 2011, 2012)
+gen postae = 0
+replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
+keep if preae ==1 | postae ==1
+collapse (mean) jbpen [pw=rxwgt], by(eligible raceb postae)
+drop if raceb == 10 | eligible == 0
+drop eligible
+reshape wide jbpen, i(raceb) j(postae)
+ren jbpen0 Pre
+ren jbpen1 Post
+export excel "powerpoint_data.xlsx", firstrow(var) sheet("pen_offer_eli") sheetreplace
+restore
 
+********************************************************************************
+*Table/graph for %eligible by race
+preserve
+gen eligible = 0 
+replace eligible = 100 if annual_dum == 1 & inrange(sector,1,2)
+gen preae = 0
+replace preae = 1 if inlist(intyear, 2010, 2011, 2012)
+gen postae = 0
+replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
+keep if preae ==1 | postae ==1
+collapse (mean) eligible [pw=rxwgt], by(raceb postae)
+drop if raceb == 10
+reshape wide eligible, i(raceb) j(postae)
+ren eligible0 Pre
+ren eligible1 Post
+export excel "powerpoint_data.xlsx", firstrow(var) sheet("pen_eli") sheetreplace
+restore
+
+********************************************************************************
+*restricting sample to those offered a pension and eligible for AE
+preserve
+replace jbpen = jbpen*100
+gen eligible = 0 
+replace eligible = 100 if annual_dum == 1 & inrange(sector,1,2)
+*restricting sample to those offered a pension and eligible for AE 
+drop if eligible == 0 | jbpen == 0 //59,762 obs
+gen preae = 0
+replace preae = 1 if inlist(intyear, 2010, 2011, 2012)
+gen postae = 0
+replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
+keep if preae ==1 | postae ==1 //31,751 obs
+collapse (mean) in_pension [pw=rxwgt], by(raceb postae)
+drop if raceb == 10 
+reshape wide in_pension, i(raceb) j(postae)
+ren in_pension0 Pre
+ren in_pension1 Post
+export excel "powerpoint_data.xlsx", firstrow(var) sheet("pen_participation_elioffer") sheetreplace
+restore
 
 ********************************************************************************
 *Pension vars by age scatter + line of best fit (added in powerpoint)
@@ -143,6 +200,13 @@ foreach x in in_pension pens_contr pens_contr_cond {
 	twoway scatter `x' age, ytitle("`ytitle'") legend(lab(1 "`lab'")) || lfit `x' age 
 	graph export "`x'_age.pdf", replace
 }
+restore
+
+********************************************************************************
+*Pension vars by lnrealearn scatter + line of best fit (added in powerpoint)
+preserve
+keep if lnrealearn >= 4
+binscatter in_pension lnrealearn, nquantiles(40) ytitle("Participation Rate (%)") xtitle("Logged Real Weekly Earnings (£)") savedata(binscatter_earn.csv) replace
 restore
 
 ********************************************************************************
@@ -205,6 +269,35 @@ foreach x in in_pension pens_contr pens_contr_cond {
 	twoway connected `x' intyear if raceb == 1, ytitle("`ytitle'") legend(lab(1 "White") lab(2 "Mixed") lab(3 "Indian") lab(4 "Pakistani") lab(5 "Bangladeshi") lab(6 "Other Asian") lab(7 "Caribbean") lab(8 "African") lab(9 "Other")) || connected `x' intyear if raceb == 2 || connected `x' intyear if raceb == 3 || connected `x' intyear if raceb == 4 || connected `x' intyear if raceb == 5 || connected `x' intyear if raceb == 6 || connected `x' intyear if raceb == 7 || connected `x' intyear if raceb == 8 || connected `x' intyear if raceb == 9
 	graph export "`x'_time_race.pdf", replace
 }
+restore
+
+********************************************************************************
+*PENSION VARS OVER TIME BY ETHNICITY - eligible only!!
+preserve
+gen eligible = 0 
+replace eligible = 100 if annual_dum == 1 & inrange(sector,1,2)
+*restricting sample to those offered a pension and eligible for AE 
+drop if eligible == 0
+drop if intyear == 2020
+collapse (mean) in_pension pens_contr pens_contr_cond [pw=rxwgt], by(intyear raceb)
+drop if raceb == 10
+reshape wide in_pension pens_contr pens_contr_cond, i(intyear) j(raceb)
+export excel "powerpoint_data.xlsx", firstrow(var) sheet("pen_time_eli") sheetreplace
+restore
+
+********************************************************************************
+*PENSION VARS OVER TIME BY ETHNICITY - eligible +offered pension only!!
+preserve
+gen eligible = 0 
+replace eligible = 100 if annual_dum == 1 & inrange(sector,1,2)
+*restricting sample to those offered a pension and eligible for AE 
+drop if eligible == 0 
+keep if jbpen == 1
+drop if intyear == 2020
+collapse (mean) in_pension pens_contr pens_contr_cond [pw=rxwgt], by(intyear raceb)
+drop if raceb == 10
+reshape wide in_pension pens_contr pens_contr_cond, i(intyear) j(raceb)
+export excel "powerpoint_data.xlsx", firstrow(var) sheet("pen_time_elioff") sheetreplace
 restore
 
 ********************************************************************************
@@ -325,67 +418,225 @@ foreach x in in_pension pens_contr pens_contr_cond {
 }
 restore
 
-*regression post
+********************************************************************************
+*PLOT OF RAW DIFFERENCE IN PENSION SAVING BY ETHNICITY, ELIGIBLE+OFFER PENSION
+local a JK
+cd "${path_`a'}\data"
+use "usoc_clean.dta", clear
+keep if inlist(jb1status, 1, 2)
+drop if sector == 0
+keep if annual_dum == 1 //only those affected by AE
+keep if jbpen == 1 // only those offered a pension
+local a JK
+cd "${path_`a'}\output"
+replace in_pension = in_pension*100
+foreach var of varlist in_pension pens_contr {
+
+	preserve
+    * Do regression (pre)
+   qui reg `var' i.raceb if inrange(intyear,2010,2012) [pw=rxwgt], vce(cluster pidp)
+    
+    * Save coefficients and standard errors 
+    gen b_mixed_pre = _b[2.raceb]
+    gen err_mixed_pre = 1.96 * _se[2.raceb]
+	
+	gen b_indian_pre = _b[3.raceb]
+    gen err_indian_pre = 1.96 * _se[3.raceb]
+	
+	gen b_pakistani_pre = _b[4.raceb]
+    gen err_pakistani_pre = 1.96 * _se[4.raceb]
+	
+	gen b_bangladeshi_pre = _b[5.raceb]
+    gen err_bangladeshi_pre = 1.96 * _se[5.raceb]
+	
+	gen b_other_asian_pre = _b[6.raceb]
+    gen err_other_asian_pre = 1.96 * _se[6.raceb]
+	
+	gen b_caribbean_pre = _b[7.raceb]
+    gen err_caribbean_pre = 1.96 * _se[7.raceb]
+	
+	gen b_african_pre = _b[8.raceb]
+    gen err_african_pre = 1.96 * _se[8.raceb]
+	
+	gen b_other_pre = _b[9.raceb]
+    gen err_other_pre = 1.96 * _se[9.raceb]
+
+	
+   * Do regression (post)
+    qui reg `var' i.raceb if inrange(intyear,2018,2020) [pw=rxwgt], vce(cluster pidp)
+    
+    * Save coefficients and standard errors 
+    gen b_mixed_post = _b[2.raceb]
+    gen err_mixed_post = 1.96 * _se[2.raceb]
+	
+	gen b_indian_post = _b[3.raceb]
+    gen err_indian_post = 1.96 * _se[3.raceb]
+	
+	gen b_pakistani_post = _b[4.raceb]
+    gen err_pakistani_post = 1.96 * _se[4.raceb]
+	
+	gen b_bangladeshi_post = _b[5.raceb]
+    gen err_bangladeshi_post = 1.96 * _se[5.raceb]
+	
+	gen b_other_asian_post = _b[6.raceb]
+    gen err_other_asian_post = 1.96 * _se[6.raceb]
+	
+	gen b_caribbean_post = _b[7.raceb]
+    gen err_caribbean_post = 1.96 * _se[7.raceb]
+	
+	gen b_african_post = _b[8.raceb]
+    gen err_african_post = 1.96 * _se[8.raceb]
+	
+	gen b_other_post = _b[9.raceb]
+    gen err_other_post = 1.96 * _se[9.raceb]
+	
+    
+    local obs_`var' = e(N)
+    
+    * Just keep relevant bits
+    keep b_* err_*
+    duplicates drop
+    
+    * Reshape
+    gen n = 1
+    reshape long b_ err_, i(n) j(race_ae) string
+    
+    * Tidy up
+    drop n
+    ren *_ *
+	
+	*sorting 
+	gen sorter = 1 if race_ae == "mixed_pre"
+	replace sorter = 2 if race_ae == "mixed_post"
+	replace sorter = 3 if race_ae == "indian_pre"
+	replace sorter = 4 if race_ae == "indian_post"
+	replace sorter = 5 if race_ae == "pakistani_pre"
+	replace sorter = 6 if race_ae == "pakistani_post"
+	replace sorter = 7 if race_ae == "bangladeshi_pre"
+	replace sorter = 8 if race_ae == "bangladeshi_post"
+	replace sorter = 9 if race_ae == "other_asian_pre"
+	replace sorter = 10 if race_ae == "other_asian_post"
+	replace sorter = 11 if race_ae == "caribbean_pre"
+	replace sorter = 12 if race_ae == "caribbean_post"
+	replace sorter = 13 if race_ae == "african_pre"
+	replace sorter = 14 if race_ae == "african_post"
+	replace sorter = 15 if race_ae == "other_pre"
+	replace sorter = 16 if race_ae == "other_post"
+	sort sorter
+	drop sorter
+	
+    * Export 
+    export excel using "powerpoint_data.xlsx", sheet("`var'_raw", replace) first(var)
+    restore
+}
+
+*******REGRESSION RESULTS POST AE FOR ELIGIBLE/OFFER ONLY*****
+local a JK
+cd "${path_`a'}\data"
+use "usoc_clean.dta", clear
+keep if inlist(jb1status, 1, 2)
+drop if sector == 0
+keep if annual_dum == 1 //only those affected by AE
+keep if jbpen == 1 // only those offered a pension
+local a JK
+cd "${path_`a'}\output"
+replace in_pension = in_pension*100
 preserve
 keep if inlist(intyear,2018,2019,2020)
-
 foreach x in in_pension pens_contr pens_contr_cond {
-	
-	eststo: reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
-	estadd local cont_1 "No"
-	estadd local cont_2 "No"
-	estadd local cont_3 "No"
-	estadd local cont_4 "No"
-	estadd local cont_5 "No"
-	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
-	estadd local cont_1 "Yes"
-	estadd local cont_2 "No"
-	estadd local cont_3 "No"
-	estadd local cont_4 "No"
-	estadd local cont_5 "No"
-	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector[pw=rxwgt], vce(cluster pidp)
-	estadd local cont_1 "Yes"
-	estadd local cont_2 "Yes"
-	estadd local cont_3 "No"
-	estadd local cont_4 "No"
-	estadd local cont_5 "No"
-	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
-	estadd local cont_1 "Yes"
-	estadd local cont_2 "Yes"
-	estadd local cont_3 "Yes"
-	estadd local cont_4 "No"
-	estadd local cont_5 "No"
-	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
-	estadd local cont_1 "Yes"
-	estadd local cont_2 "Yes"
-	estadd local cont_3 "Yes"
-	estadd local cont_4 "Yes"
-	estadd local cont_5 "No"
-	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
-	estadd local cont_1 "Yes"
-	estadd local cont_2 "Yes"
-	estadd local cont_3 "Yes"
-	estadd local cont_4 "Yes"
-	estadd local cont_5 "Yes"
-	estadd local cont_6 "No"
-	eststo: reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk [pw=rxwgt], vce(cluster pidp) 
-	estadd local cont_1 "Yes"
-	estadd local cont_2 "Yes"
-	estadd local cont_3 "Yes"
-	estadd local cont_4 "Yes"
-	estadd local cont_5 "Yes"
-	estadd local cont_6 "Yes"
-	esttab using `x'_postae_race.tex, star(* 0.10 ** 0.05 *** 0.01) se replace booktabs keep(*.raceb) drop(1.raceb 10.raceb) nomtitles label stat(cont_1 cont_2 cont_3 cont_4 cont_5 cont_6 N, label("Controls 1" "Controls 2" "Controls 3" "Controls 4" "Controls 5" "Controls 6" "Observations")) 
-	eststo clear
+	reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
+	outreg2 using `x'_post_reg.xls, replace label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb) 
+	reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
+	outreg2 using `x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+	reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
+	outreg2 using `x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+	reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
+	outreg2 using `x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+	reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
+	outreg2 using `x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+	reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
+	outreg2 using `x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+	reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk [pw=rxwgt], vce(cluster pidp)
+	outreg2 using `x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
 }
 restore
 
-********************************************************************************
+*****PLOT FOR ELIGIBLE/OFFER REGRESSION 
+local a JK
+cd "${path_`a'}\data"
+use "usoc_clean.dta", clear
+keep if inlist(jb1status, 1, 2)
+drop if sector == 0
+keep if annual_dum == 1 //only those affected by AE
+keep if jbpen == 1 // only those offered a pension
+local a JK
+cd "${path_`a'}\output"
+replace in_pension = in_pension*100
+foreach var of varlist in_pension pens_contr {
+
+	preserve
+   * Do regression (post)
+    qui reg `var' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk if inrange(intyear,2018,2020) [pw=rxwgt], vce(cluster pidp)
+    
+    * Save coefficients and standard errors 
+    gen b_mixed_post = _b[2.raceb]
+    gen err_mixed_post = 1.96 * _se[2.raceb]
+	
+	gen b_indian_post = _b[3.raceb]
+    gen err_indian_post = 1.96 * _se[3.raceb]
+	
+	gen b_pakistani_post = _b[4.raceb]
+    gen err_pakistani_post = 1.96 * _se[4.raceb]
+	
+	gen b_bangladeshi_post = _b[5.raceb]
+    gen err_bangladeshi_post = 1.96 * _se[5.raceb]
+	
+	gen b_other_asian_post = _b[6.raceb]
+    gen err_other_asian_post = 1.96 * _se[6.raceb]
+	
+	gen b_caribbean_post = _b[7.raceb]
+    gen err_caribbean_post = 1.96 * _se[7.raceb]
+	
+	gen b_african_post = _b[8.raceb]
+    gen err_african_post = 1.96 * _se[8.raceb]
+	
+	gen b_other_post = _b[9.raceb]
+    gen err_other_post = 1.96 * _se[9.raceb]
+	
+    
+    local obs_`var' = e(N)
+    
+    * Just keep relevant bits
+    keep b_* err_*
+    duplicates drop
+    
+    * Reshape
+    gen n = 1
+    reshape long b_ err_, i(n) j(race_ae) string
+    
+    * Tidy up
+    drop n
+    ren *_ *
+	
+	*sorting 
+	gen sorter = 1 if race_ae == "mixed_post"
+	replace sorter = 2 if race_ae == "indian_post"
+	replace sorter = 3 if race_ae == "pakistani_post"
+	replace sorter = 4 if race_ae == "bangladeshi_post"
+	replace sorter = 5 if race_ae == "other_asian_post"
+	replace sorter = 6 if race_ae == "caribbean_post"
+	replace sorter = 7 if race_ae == "african_post"
+	replace sorter = 8 if race_ae == "other_post"
+	sort sorter
+	drop sorter
+	
+    * Export 
+    export excel using "powerpoint_data.xlsx", sheet("`var'_coef_POST", replace) first(var)
+    restore
+}
+
+
+
 *PLOTTING ESTIMATES OF MODEL WITH ALL CONTROLS (PRE/POST AE)
 foreach var of varlist in_pension pens_contr pens_contr_cond {
  
@@ -597,14 +848,14 @@ foreach var of varlist in_pension pens_contr {
 }
 
 
-
-******FOR ELIGIBLE EMPLOYEES, BY SEX------------------------------------
+******FOR ELIGIBLE EMPLOYEES offered pension, BY SEX------------------------------------
 local a JK
 cd "${path_`a'}\data"
 use "usoc_clean.dta", clear
 keep if inlist(jb1status, 1, 2)
 drop if sector == 0
 keep if annual_dum == 1 //only those affected by AE
+keep if jbpen == 1 // only those offered a pension
 local a JK
 cd "${path_`a'}\output"
 replace in_pension = in_pension*100
@@ -813,6 +1064,7 @@ foreach var of varlist in_pension pens_contr {
 
 
 end
+
 
 
 *--------------------------------SUMMARY STATS----------------------------------
