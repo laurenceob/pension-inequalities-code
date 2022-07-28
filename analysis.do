@@ -92,6 +92,50 @@ graph export "retneed_race.pdf", replace
 restore
 
 ********************************************************************************
+*Bar chart data for non-restricted, eligible, eligible+offer pension participation by ethnicity
+local a JK
+cd "${path_`a'}\data"
+use "usoc_clean.dta", clear
+local a JK
+cd "${path_`a'}\output"
+keep if inlist(jb1status, 1, 2) //drops those who are unemployed; 28,605 dropped
+replace in_pension = in_pension*100 
+*--------------
+gen unrestrict = 1
+replace jbpen = jbpen*100
+gen eligible = 0 
+replace eligible = 1 if annual_dum == 1 & inrange(sector,1,2) 
+gen elioffer = 0
+replace elioffer = 1 if jbpen == 100 & eligible == 1
+gen postae = 0
+replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
+keep if postae == 1
+
+foreach i in unrestrict eligible elioffer {
+    preserve
+	tempfile `i'
+	keep if `i' == 1
+	collapse (mean) in_pension [pw=rxwgt], by(raceb)
+	drop if raceb == 10 
+	ren in_pension `i'
+	save ``i''
+	restore
+}
+use `unrestrict', clear
+merge 1:1 raceb using `eligible'
+drop _merge
+merge 1:1 raceb using `elioffer' 
+drop _merge
+export excel "powerpoint_data.xlsx", firstrow(var) sheet("pen_restrict") sheetreplace
+local a JK
+cd "${path_`a'}\data"
+use "usoc_clean.dta", clear
+local a JK
+cd "${path_`a'}\output"
+keep if inlist(jb1status, 1, 2) //drops those who are unemployed; 28,605 dropped
+replace in_pension = in_pension*100 
+
+********************************************************************************
 *Table for number in each ethnic group by year
 preserve
 gen preae = 0
