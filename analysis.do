@@ -60,6 +60,27 @@ cd "${path_`a'}\output"
 keep if inlist(jb1status, 1, 2) //drops those who are unemployed; 28,605 dropped
 replace in_pension = in_pension*100 
 
+*gender gap in pension participation post AE for whites
+preserve
+keep if raceb == 1
+keep if inrange(intyear,2018,2020)
+collapse (mean) in_pension, by (female)
+export excel "powerpoint_data.xlsx", firstrow(var) sheet("sex_pension") sheetreplace
+restore
+*Women: 79.4%
+*Men: 78.5%
+
+*share of different ethnicities in employment post AE
+preserve 
+keep if inrange(intyear,2018,2020)
+gen employed = .
+replace employed = 0 if sector == 0 
+replace employed = 1 if sector == 1 | sector == 2
+collapse (mean) employed, by(raceb)
+export excel "powerpoint_data.xlsx", firstrow(var) sheet("employed_race") sheetreplace
+restore
+*Pakistani and Bangladeshi individuals more likely to be self-employed -- by roughly 5-7% points
+
 ********************************************************************************
 ***GRAPHS OF PENSION PARTICIPATION/CONT. RATES (not used anymore)
 preserve
