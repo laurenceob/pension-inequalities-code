@@ -4,6 +4,7 @@
 **** Date started: 	27/06/2022 
 **** Description:	This do file produces output for pension inequalities project
 ********************************************************************************/
+
 capture program drop main
 program define main 
 
@@ -24,6 +25,7 @@ program define main
 
 end
 
+
 *-----------------------------------STARTUP-------------------------------------
 capture program drop start
 program define start
@@ -40,38 +42,55 @@ ssc install ftools //needed for reghdfe
 ssc install oaxaca //oaxaca decomposition
 ssc install binscatter //for scatter graphs
 ssc install winsor //winsorize data
-ssc install coefplot
+ssc install coefplot //coeficient plots of regression output
 */
 
 *working directory set from master do file
 
 use "$workingdata/usoc_clean.dta", clear
+
 ***Restricting sample to employed/self-employed
 keep if inlist(jb1status, 1, 2) //drops those who are unemployed; 28,605 dropped
+
+*making pension participation /100 
 replace in_pension = in_pension*100 
 
 end
 
+
+*-----------------------------------SAMPLE STATS--------------------------------
 capture program drop sample_stat
 program define sample_stat
 
-*Table for number in each ethnic group pre/post AE
+*Table for number in each ethnic group pre/post AE - checking sample size
+
 preserve
+*generating dummy variables for pre/post AE
 gen preae = 0
 replace preae = 1 if inlist(intyear, 2010, 2011, 2012)
 gen postae = 0
 replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
-keep if preae ==1 | postae ==1
+*keeping only if pre/post AE, not during rollout
+keep if preae == 1 | postae == 1
 gen num = _n
+*collapsing by the number of observations by race pre/post
 collapse (count) num, by(postae raceb)
+*reshaping so correct format for exporting
 reshape wide num, i(postae) j(raceb)
+*drop missing
 drop num10
+*exporting to excel
 export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("racecount_table") sheetreplace
 restore
 
-*Graphs of retirement expectations by race 
+********************************************************************************
+*Graphs of retirement expectations by ethnicity
+*NOTE: only asked to a limited sample - those aged 45,50,55
+
 preserve
-keep if retneed >= 0
+*keeping sample for those asked the question
+keep if inlist(age,45,50,55) & retneed >= 0 // takes value of -1 if missing
+*collapsing by race - mean retirement income expectations (weighted)
 collapse (mean) retneed [pw=rxwgt], by(raceb)
 *for powerpoint
 export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("retirement_expectations") sheetreplace
@@ -80,30 +99,44 @@ graph bar retneed if inrange(raceb,1,9), over(raceb, label(angle(45))) ytitle("E
 graph export "$output/retneed_race.pdf", replace
 restore
 
+********************************************************************************
+
 *share of different ethnicities in employment post AE
 preserve 
+*keep if post AE
 keep if inrange(intyear,2018,2020)
+*generating dummy variable for if employed or self-employed
 gen employed = .
 replace employed = 0 if sector == 0 
 replace employed = 1 if sector == 1 | sector == 2
+*collapsing by racae - mean self-employment rate (for workers)
 collapse (mean) employed, by(raceb)
 export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("selfemploy_race") sheetreplace
 restore
 *Pakistani and Bangladeshi individuals more likely to be self-employed -- by roughly 5-7% points
+********************************************************************************
 
 end 
 
+
+*-----------------------------------OVER TIME-----------------------------------
 capture program drop graph_over_time
 program define graph_over_time
 
-*PENSION VARS OVER TIME BY ETHNICITY
+*pension vars over time by ethnicity - workers
 preserve
-drop if intyear == 2020
+drop if intyear == 2020 // limited sample size so noisy plot for 2020
+*collapsing pension participation/contribution rates by year and race (weighted)
 collapse (mean) in_pension pens_contr pens_contr_cond [pw=rxwgt], by(intyear raceb)
+*dropping those with missing race value
 drop if raceb == 10
+*reshaping 
 reshape wide in_pension pens_contr pens_contr_cond, i(intyear) j(raceb)
+*exporting to excel
 export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("pen_time") sheetreplace
+*reshaping back
 reshape long
+*exporting to latex
 foreach x in in_pension pens_contr pens_contr_cond {
     
 	if "`x'" == "in_pension" local ytitle "Participation Rate (%)"
@@ -116,50 +149,67 @@ foreach x in in_pension pens_contr pens_contr_cond {
 restore
 
 ********************************************************************************
-*PENSION VARS OVER TIME BY ETHNICITY - eligible only!!
+*pension vars over time by ethnicity - eligible for AE
+
 preserve
+*generating dummy for AE eligibility
 gen eligible = 0 
-replace eligible = 1 if annual_dum == 1 & inrange(sector,1,2)
+replace eligible = 1 if annual_dum == 1 & inrange(sector,1,2) // eligible if employed (public (sector = 2) or private (sector = 1)) and earning more than 10k per year
 *restricting sample to those offered a pension and eligible for AE 
 drop if eligible == 0
 drop if intyear == 2020
+*collapsing pension participation/contribution rates by race/year (weighted)
 collapse (mean) in_pension pens_contr pens_contr_cond [pw=rxwgt], by(intyear raceb)
-drop if raceb == 10
+*dropping those with missing race value
+drop if raceb == 10 
+*reshaping so correct for exporting to excel
 reshape wide in_pension pens_contr pens_contr_cond, i(intyear) j(raceb)
 export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("pen_time_eli") sheetreplace
 restore
 
 ********************************************************************************
-*PENSION VARS OVER TIME BY ETHNICITY - eligible +offered pension only!!
+*pension vars over time by ethnicity - eligible + offered pension
+
 preserve
+*generating dummy for AE eligibility
 gen eligible = 0 
 replace eligible = 1 if annual_dum == 1 & inrange(sector,1,2)
 *restricting sample to those offered a pension and eligible for AE 
 drop if eligible == 0 
-keep if jbpen == 1
+keep if jbpen == 1 // jbpen = 1 if report being offered a pension
 drop if intyear == 2020
+*collapsing pension participation/contribution rates by race/year (weighted)
 collapse (mean) in_pension pens_contr pens_contr_cond [pw=rxwgt], by(intyear raceb)
 drop if raceb == 10
+*reshaping
 reshape wide in_pension pens_contr pens_contr_cond, i(intyear) j(raceb)
+*exporting to excel
 export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("pen_time_elioff") sheetreplace
 restore
+********************************************************************************
 
 end
 
+
+*-----------------------------------RESTRICT SAMPLE-----------------------------
 capture program drop bar_restrict
 program define bar_restrict
 
 *Bar chart data for non-restricted, eligible, eligible+offer pension participation by ethnicity
+
+*generating dummy variables for if sample is workers, only those eligible for AE, or only those eligible+offered a pension
 gen unrestrict = 1
-replace jbpen = jbpen*100
+replace jbpen = jbpen*100 // so /100
 gen eligible = 0 
 replace eligible = 1 if annual_dum == 1 & inrange(sector,1,2) 
 gen elioffer = 0
 replace elioffer = 1 if jbpen == 100 & eligible == 1
+*generating dummy variable for if post AE
 gen postae = 0
 replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
 keep if postae == 1
 
+*for each sample, generate a temporary file and collapse pension participation by race (weighted)
 foreach i in unrestrict eligible elioffer {
     preserve
 	tempfile `i'
@@ -170,85 +220,89 @@ foreach i in unrestrict eligible elioffer {
 	save ``i''
 	restore
 }
+*merging mean pension participation by race for different samples into one dataset
 use `unrestrict', clear
 merge 1:1 raceb using `eligible'
 drop _merge
 merge 1:1 raceb using `elioffer' 
 drop _merge
+*exporting to excel
 export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("pen_restrict") sheetreplace
 
+*reload data
 use "$workingdata/usoc_clean.dta", clear
 keep if inlist(jb1status, 1, 2) //drops those who are unemployed; 28,605 dropped
 replace in_pension = in_pension*100 
 
-
-*Table/graph for %offered by race for eligible employees
-preserve
-replace jbpen = jbpen*100
-gen eligible = 0 
-replace eligible = 100 if annual_dum == 1 & inrange(sector,1,2)
-gen preae = 0
-replace preae = 1 if inlist(intyear, 2010, 2011, 2012)
-gen postae = 0
-replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
-keep if preae ==1 | postae ==1
-collapse (mean) jbpen [pw=rxwgt], by(eligible raceb postae)
-drop if raceb == 10 | eligible == 0
-drop eligible
-reshape wide jbpen, i(raceb) j(postae)
-ren jbpen0 Pre
-ren jbpen1 Post
-export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("pen_offer_eli") sheetreplace
-restore
-
 ********************************************************************************
-*Table/graph for %eligible by race
+*Table/graph for % eligible by ethnicity for workers
 preserve
+*generating dummy for AE eligibility
 gen eligible = 0 
 replace eligible = 100 if annual_dum == 1 & inrange(sector,1,2)
+*generating dummy for pre/post AE
 gen preae = 0
 replace preae = 1 if inlist(intyear, 2010, 2011, 2012)
 gen postae = 0
 replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
+*keeping if pre/post AE, not during
 keep if preae ==1 | postae ==1
+*collapsing eligibility by race and pre/post AE (weighted)
 collapse (mean) eligible [pw=rxwgt], by(raceb postae)
+*dropping if missing race value
 drop if raceb == 10
+*reshaping
 reshape wide eligible, i(raceb) j(postae)
 ren eligible0 Pre
 ren eligible1 Post
+*exporting to excel
 export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("pen_eli") sheetreplace
 restore
 
 ********************************************************************************
-*restricting sample to those offered a pension and eligible for AE
+*Table/graph for % offered pension by ethnicity for eligible employees
 preserve
-replace jbpen = jbpen*100
+replace jbpen = jbpen*100 //so if report being offered a pension is /100
+*generating dummy if eligible for AE
 gen eligible = 0 
 replace eligible = 100 if annual_dum == 1 & inrange(sector,1,2)
-*restricting sample to those offered a pension and eligible for AE 
-drop if eligible == 0 | jbpen == 0 //59,762 obs
+*generating dummy for pre/post AE
 gen preae = 0
 replace preae = 1 if inlist(intyear, 2010, 2011, 2012)
 gen postae = 0
 replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
-keep if preae ==1 | postae ==1 //31,751 obs
-collapse (mean) in_pension [pw=rxwgt], by(raceb postae)
-drop if raceb == 10 
-reshape wide in_pension, i(raceb) j(postae)
-ren in_pension0 Pre
-ren in_pension1 Post
-export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("pen_participation_elioffer") sheetreplace
+*keeping if pre/post AE
+keep if preae ==1 | postae ==1
+*collapsing if report offered a pension by race and pre/post AE
+collapse (mean) jbpen [pw=rxwgt], by(eligible raceb postae)
+*only for those eligible for AE, dropping those missing race value
+drop if raceb == 10 | eligible == 0
+drop eligible
+*reshaping
+reshape wide jbpen, i(raceb) j(postae)
+ren jbpen0 Pre
+ren jbpen1 Post
+*exporting to excel
+export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("pen_offer_eli") sheetreplace
 restore
+********************************************************************************
 
 end
 
+
+*-----------------------------------COVARIATES GRAPHS---------------------------
 capture program drop covariates_graphs
 program define covariates_graphs
 
 
-*Checking distribution of age by ethnic group
+*Distribution of age by ethnic group
 preserve
-kdensity age, nograph gen(x fx)
+*overall age distribution 
+kdensity age, nograph gen(x fx) // x stores the estimation points and fx stores the density estimates - x needed for separate estimation by ethnicity
+ 
+*estimating age distribution by ethnicity
+*at(x) specifies a variable that contains the values at which the density should be estimated. This option allows you to more easily obtain density estimates for different variables or different subsamples of a variable and then overlay the estimated densities for comparison.
+
 forvalues i=1/9{
 	kdensity age if raceb == `i', nograph gen(fx`i') at(x)
 }
@@ -268,6 +322,8 @@ export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("age_dist") she
 line fx1 fx2 fx3 fx4 fx5 fx6 fx7 fx8 fx9 x, sort ytitle(Density)
 graph export "$output/dens_age_race.pdf", replace
 restore
+
+********************************************************************************
 
 *Pension vars by age scatter + line of best fit (added in powerpoint)
 preserve
@@ -290,7 +346,7 @@ foreach x in in_pension pens_contr pens_contr_cond {
 restore
 
 ********************************************************************************
-*Scatter of pen vars by ethnicity and age
+*Scatter of pen vars by ethnicity and age - looking within each age group for differences in pen vars by ethnicity
 preserve
 collapse (mean) in_pension pens_contr pens_contr_cond [pw=rxwgt], by(age_dum raceb)
 *for powerpoint
@@ -307,8 +363,9 @@ foreach x in in_pension pens_contr pens_contr_cond {
 }
 restore
 
+********************************************************************************
+*earnings distribution by ethnicity
 
-*EARNINGS DISTRIBUTION BY ETHNICITY
 preserve
 kdensity real_earn, nograph gen(d fd)
 forvalues i=1/9{
@@ -328,21 +385,26 @@ export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("earn_dist") sh
 line fd1 fd2 fd3 fd4 fd5 fd6 fd7 fd8 fd9 d if inrange(d,-200,2500), sort ytitle(Density) xtitle(Real Weekly Earnings)
 graph export "$output/dens_inc_race.pdf", replace
 restore
+********************************************************************************
 
 end
 
+
+*-----------------------------------POST AE REG---------------------------------
 capture program drop regression_post
 program define regression_post
 
-*AE starts in Oct 2012, by Feb 2018 AE applied to all employers
+*regression results post AE for eligible employees offered a pension (restricted sample)
+*Note: AE starts in Oct 2012, by Feb 2018 AE applied to all employers
 
-*******REGRESSION RESULTS POST AE FOR ELIGIBLE/OFFER ONLY*****
 preserve
+*keeping if post AE
 keep if inlist(intyear,2018,2019,2020)
-keep if inlist(jb1status, 1, 2)
-drop if sector == 0
-keep if annual_dum == 1 //only those affected by AE
-keep if jbpen == 1 // only those offered a pension
+*eligible for AE
+drop if sector == 0 // employed
+keep if annual_dum == 1 // earnings threshold
+*offered a pension
+keep if jbpen == 1 
 
 foreach x in in_pension pens_contr pens_contr_cond {
 	reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
@@ -366,12 +428,16 @@ restore
 
 end
 
+
+*-----------------------------------BY SEX--------------------------------------
 capture program drop by_sex
 program define by_sex
 
 *gender gap in pension participation post AE for whites
 preserve
+*keeping whites only
 keep if raceb == 1
+*keeping if post AE
 keep if inrange(intyear,2018,2020)
 collapse (mean) in_pension, by (female)
 export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("sex_pension") sheetreplace
@@ -380,13 +446,16 @@ restore
 *Men: 78.5%
 
 
-******FOR ELIGIBLE EMPLOYEES offered pension, BY SEX-----------------------------------
+********************************************************************************
+*regression results by sex and ethnicity - coeficient plot pre/post AE
+*separate regressions for men/women
+
+*MEN
 foreach var of varlist in_pension pens_contr {
 
 	preserve
-	keep if inlist(jb1status, 1, 2)
-	drop if sector == 0
-	keep if annual_dum == 1 //only those affected by AE
+	drop if sector == 0 //not including self-employed
+	keep if annual_dum == 1 //earning above 10k
 	keep if jbpen == 1 // only those offered a pension
     * Do regression (pre)
    qui reg `var' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk if inrange(intyear,2010,2012) & female == 0 [pw=rxwgt], vce(cluster pidp)
@@ -486,12 +555,13 @@ foreach var of varlist in_pension pens_contr {
     restore
 }
 
+********************************************************************************
+*WOMEN
 foreach var of varlist in_pension pens_contr {
 
 	preserve
-	keep if inlist(jb1status, 1, 2)
-	drop if sector == 0
-	keep if annual_dum == 1 //only those affected by AE
+	drop if sector == 0 // dropping self-employed
+	keep if annual_dum == 1 //earning above 10k
 	keep if jbpen == 1 // only those offered a pension
     * Do regression (pre)
    qui reg `var' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk if inrange(intyear,2010,2012) & female == 1 [pw=rxwgt], vce(cluster pidp)
