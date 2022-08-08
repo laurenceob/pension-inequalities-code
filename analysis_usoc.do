@@ -1,5 +1,5 @@
 /********************************************************************************
-**** Title: 		analysis.do 
+**** Title: 		analysis_usoc.do 
 **** Author: 		Jack Kemp 
 **** Date started: 	27/06/2022 
 **** Description:	This do file produces output for pension inequalities project
@@ -286,6 +286,97 @@ ren jbpen1 Post
 export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("pen_offer_eli") sheetreplace
 restore
 ********************************************************************************
+
+*CHECK - restricting to public sector only
+*unlikely to be non-compliance so tells us likely extent of measurement error in reporting being offered a pension
+
+*Table/graph for % offered pension by ethnicity for eligible public sector employees
+preserve
+replace jbpen = jbpen*100 //so if report being offered a pension is /100
+*generating dummy if eligible for AE
+gen eligible = 0 
+replace eligible = 100 if annual_dum == 1 & inrange(sector,1,2)
+*generating dummy for pre/post AE
+gen preae = 0
+replace preae = 1 if inlist(intyear, 2010, 2011, 2012)
+gen postae = 0
+replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
+*keeping if pre/post AE
+keep if preae ==1 | postae ==1
+*keeping if public sector
+keep if sector == 2
+*collapsing if report offered a pension by race and pre/post AE
+collapse (mean) jbpen [pw=rxwgt], by(eligible raceb postae)
+*only for those eligible for AE, dropping those missing race value
+drop if raceb == 10 | eligible == 0
+drop eligible
+*reshaping
+reshape wide jbpen, i(raceb) j(postae)
+ren jbpen0 Pre
+ren jbpen1 Post
+*exporting to excel
+export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("offer_check") sheetreplace
+restore
+
+*find that it is mostly firm non-compliance, not measurement error
+
+********************************************************************************
+*graph to show extent of non-compliance by firm size
+*% offered pension by firm size for eligible private sector employees
+preserve
+replace jbpen = jbpen*100 //so if report being offered a pension is /100
+*generating dummy if eligible for AE
+gen eligible = 0 
+replace eligible = 100 if annual_dum == 1 & inrange(sector,1,2)
+*generating dummy for pre/post AE
+gen preae = 0
+replace preae = 1 if inlist(intyear, 2010, 2011, 2012)
+gen postae = 0
+replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
+*keeping if pre/post AE
+keep if preae ==1 | postae ==1
+*keeping if private sector
+keep if sector == 1
+*collapsing if report offered a pension by firm size and pre/post AE
+collapse (mean) jbpen [pw=rxwgt], by(eligible jbsize postae)
+*only for those eligible for AE, dropping those missing race value
+drop if inlist(jbsize,0,10,11) | eligible == 0
+drop eligible
+*reshaping
+reshape wide jbpen, i(jbsize) j(postae)
+ren jbpen0 Pre
+ren jbpen1 Post
+*exporting to excel
+export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("offer_jbsize") sheetreplace
+restore
+
+*bar chart showing % of each ethnicity in a small firm [1-9 employees] (sizes with greatest non-compliance)
+preserve
+*generating dummy if in small firm
+gen small = .
+replace small = 0 if inrange(jbsize,3,9)
+replace small = 100 if inrange(jbsize,1,2)
+*generating dummy if eligible for AE
+gen eligible = 0 
+replace eligible = 100 if annual_dum == 1 & inrange(sector,1,2)
+*generating dummy for post AE
+gen postae = 0
+replace postae = 1 if inlist(intyear, 2018, 2019, 2020)
+*keeping if post AE
+keep if postae ==1
+*keeping if private sector
+keep if sector == 1
+drop if eligible == 0
+*collapsing if report offered a pension by firm size and pre/post AE
+collapse (mean) small [pw=rxwgt], by(raceb)
+*exporting to excel
+export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("jbsize_eth") sheetreplace
+restore
+
+
+********************************************************************************
+
+
 
 end
 
