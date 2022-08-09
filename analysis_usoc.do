@@ -753,3 +753,32 @@ foreach var of varlist in_pension pens_contr {
 
 end
 
+
+*-----------------------------------SELF EMPLOYED-------------------------------
+capture program drop self_employed
+program define self_employed
+
+*regression of pension participation (pooled) on ethnicity - which covariates are important?
+preserve
+*keeping self employed
+keep if sector == 0 
+
+*regression
+reg in_pension i.raceb [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/self_reg.xls, replace label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb) 
+reg in_pension i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+
+restore
+
+end
