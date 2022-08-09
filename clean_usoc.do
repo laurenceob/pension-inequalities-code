@@ -64,8 +64,10 @@ program define clean_ff_vars
 
 	use "$workingdata/bhps_constant_vars1", clear
 	append using "$workingdata/bhps_constant_vars2"
+	append using "$workingdata/bhps_constant_vars3"
+	append using "$workingdata/bhps_constant_vars4"
 	replace wave = wave - 18
-	ren racel racel_bhps
+	ren racel racel_bhps 
 	append using "$workingdata/usoc_extracted"
 	append using "$workingdata/usoc_extracted_wave8"
 	append using "$workingdata/usoc_wave1"
@@ -95,7 +97,13 @@ program define clean_ff_vars
 	replace bornuk = 1 if inrange(plbornd, 1, 368)
 	replace bornuk = 0 if inrange(plbornc, 6, 92)
 	
-	* Copy forward education level and race
+	* Make consistent religion variable 
+	replace oprlg1 = 1 if oprlg == 2 // no religion
+	
+	* Make a new religion variable that is aggregated 
+	
+	
+	* Copy forward education level and race and religion
 	sort pidp wave
 	by pidp (wave): replace edgrpnew = edgrpnew[_n-1] if missing(edgrpnew)
 	by pidp (wave): replace raceb = raceb[_n-1] if missing(raceb) // still missing sometimes but better
