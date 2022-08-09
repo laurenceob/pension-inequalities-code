@@ -100,14 +100,29 @@ program define clean_ff_vars
 	* Make consistent religion variable 
 	replace oprlg1 = 1 if oprlg == 2 // no religion
 	
-	* Make a new religion variable that is aggregated 
 	
+	
+	* Make a new religion variable that is aggregated 
+	gen religion = .
+	replace religion = 0 if oprlg1 == 1 // no religion
+	replace religion = 1 if inlist(oprlg1,2,3,4,5,6,7,8,9,10,11,17,18,19,20,21) //christian
+	replace religion = 2 if oprlg1 == 12 //muslim
+	replace religion = 3 if oprlg1 == 13 //hindu
+	replace religion = 4 if oprlg1 == 14 //jewish
+	replace religion = 5 if oprlg1 == 15 //sikh
+	replace religion = 6 if inlist(oprlg1,16,97) //other
 	
 	* Copy forward education level and race and religion
 	sort pidp wave
 	by pidp (wave): replace edgrpnew = edgrpnew[_n-1] if missing(edgrpnew)
 	by pidp (wave): replace raceb = raceb[_n-1] if missing(raceb) // still missing sometimes but better
 	by pidp (wave): replace bornuk = bornuk[_n-1] if missing(bornuk) 
+	by pidp (wave): replace religion = religion[_n-1] if missing(religion)
+	
+	replace religion = 7 if missing(religion) //missing
+	cap label drop religion
+	label define religion 0 "No religion" 1 "Christian" 2 "Muslim" 3 "Hindu" 4 "Jewish" 5 "Sikh" 6 "Other" 7 "Missing"
+	label values religion religion
 	
 	* Sort out missings for bornuk 
 	replace bornuk = 2 if missing(bornuk)

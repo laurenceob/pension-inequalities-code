@@ -116,6 +116,31 @@ restore
 *Pakistani and Bangladeshi individuals more likely to be self-employed -- by roughly 5-7% points
 ********************************************************************************
 
+*table: % of each religion by ethnic group e.g. x% of Whites are Christian
+preserve
+gen num = _n
+*collapsing by the number of observations by ethnicity and religion
+collapse (count) num, by(religion raceb)
+reshape wide num, i(raceb) j(religion)
+drop if inrange(raceb,9,10)
+egen total = rowtotal(num*)
+forvalues i = 0/7{
+   replace num`i' = (num`i'/ total)*100 
+}
+drop total 
+ren num0 No_religion
+ren num1 Christian
+ren num2 Muslim
+ren num3 Hindu
+ren num4 Jewish
+ren num5 Sikh
+ren num6 Other
+ren num7 Missing
+export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("religion_eth") sheetreplace
+restore
+
+********************************************************************************
+
 end 
 
 
@@ -517,6 +542,35 @@ restore
 *NOTE: regression tables outputted to different excel sheet to powerpoint_data
 
 
+********************************************************************************
+*WITH RELIGION AS CONTROL IN LAST COLUMN - pension participation
+preserve
+*keeping if post AE
+keep if inlist(intyear,2018,2019,2020)
+*eligible for AE
+drop if sector == 0 // employed
+keep if annual_dum == 1 // earnings threshold
+*offered a pension
+keep if jbpen == 1 
+
+reg in_pension i.raceb [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/relig_post_reg.xls, replace label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb) 
+reg in_pension i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk i.religion [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+
+restore
+
+
 end
 
 
@@ -782,3 +836,7 @@ outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.
 restore
 
 end
+
+
+
+
