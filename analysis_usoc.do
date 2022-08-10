@@ -22,6 +22,8 @@ program define main
 	
 	by_sex
 	
+	self_employed
+	
 
 end
 
@@ -513,6 +515,16 @@ program define regression_post
 *regression results post AE for eligible employees offered a pension (restricted sample)
 *Note: AE starts in Oct 2012, by Feb 2018 AE applied to all employers
 
+local age_vars "age agesq i.intyear"
+local earn_vars "lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector"
+local job_vars "i.sector i.jbsize i.industry i.occupation i.parttime"
+local indiv_vars "i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.havekid1 i.havekid2 i.havekid3 i.havekid4"
+local partner_vars "i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector"
+local other_vars "housecost_win i.tenure i.bornuk avg_earn5 coefvar"
+
+local drp_rce "2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb"
+
+
 preserve
 *keeping if post AE
 keep if inlist(intyear,2018,2019,2020)
@@ -523,20 +535,34 @@ keep if annual_dum == 1 // earnings threshold
 keep if jbpen == 1 
 
 foreach x in in_pension pens_contr pens_contr_cond {
+	
+	*column 1 - raw difference
 	reg `x' i.raceb [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/`x'_post_reg.xls, replace label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb) 
-	reg `x' i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/`x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-	reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/`x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-	reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/`x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-	reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/`x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-	reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/`x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-	reg `x' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/`x'_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+	outreg2 using $output/`x'_post_reg.xls, replace label keep(`drp_rce') 
+	
+	*column 2 - age controls
+	reg `x' i.raceb `age_vars' [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/`x'_post_reg.xls, append label keep(`drp_rce')
+	
+	*column 3 - earning controls
+	reg `x' i.raceb `age_vars' `earn_vars' [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/`x'_post_reg.xls, append label keep(`drp_rce')
+	
+	*column 4 - job variables
+	reg `x' i.raceb `age_vars' `earn_vars' `job_vars' [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/`x'_post_reg.xls, append label keep(`drp_rce')
+	
+	*column 5 - individual variables
+	reg `x' i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/`x'_post_reg.xls, append label keep(`drp_rce')
+	
+	*column 6 - partner variables
+	reg `x' i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' `partner_vars' [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/`x'_post_reg.xls, append label keep(`drp_rce')
+	
+	*column 7 - all controls
+	reg `x' i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' `partner_vars' `other_vars' [pw=rxwgt], vce(cluster pidp)
+	outreg2 using $output/`x'_post_reg.xls, append label keep(`drp_rce')
 }
 restore
 *NOTE: regression tables outputted to different excel sheet to powerpoint_data
@@ -553,20 +579,33 @@ keep if annual_dum == 1 // earnings threshold
 *offered a pension
 keep if jbpen == 1 
 
+*column 1 - raw difference
 reg in_pension i.raceb [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/relig_post_reg.xls, replace label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb) 
-reg in_pension i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
-outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk i.religion [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/relig_post_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+outreg2 using $output/relig_post_reg.xls, replace label keep(`drp_rce') 
+	
+*column 2 - age controls
+reg in_pension i.raceb `age_vars' [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/relig_post_reg.xls, append label keep(`drp_rce')
+	
+*column 3 - earning controls
+reg in_pension i.raceb `age_vars' `earn_vars' [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/relig_post_reg.xls, append label keep(`drp_rce')
+	
+*column 4 - job variables
+reg in_pension i.raceb `age_vars' `earn_vars' `job_vars' [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/relig_post_reg.xls, append label keep(`drp_rce')
+	
+*column 5 - individual variables
+reg in_pension i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/relig_post_reg.xls, append label keep(`drp_rce')
+	
+*column 6 - partner variables
+reg in_pension i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' `partner_vars' [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/relig_post_reg.xls, append label keep(`drp_rce')
+	
+*column 7 - all controls
+reg in_pension i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' `partner_vars' `other_vars' i.religion [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/relig_post_reg.xls, append label keep(`drp_rce')
 
 restore
 
@@ -595,6 +634,15 @@ restore
 *regression results by sex and ethnicity - coeficient plot pre/post AE
 *separate regressions for men/women
 
+local age_vars "age agesq i.intyear"
+local earn_vars "lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector"
+local job_vars "i.sector i.jbsize i.industry i.occupation i.parttime"
+local indiv_vars "i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.havekid1 i.havekid2 i.havekid3 i.havekid4"
+local partner_vars "i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector"
+local other_vars "housecost_win i.tenure i.bornuk avg_earn5 coefvar"
+
+local drp_rce "2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb"
+
 *MEN
 foreach var of varlist in_pension pens_contr {
 
@@ -603,7 +651,7 @@ foreach var of varlist in_pension pens_contr {
 	keep if annual_dum == 1 //earning above 10k
 	keep if jbpen == 1 // only those offered a pension
     * Do regression (pre)
-   qui reg `var' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk if inrange(intyear,2010,2012) & female == 0 [pw=rxwgt], vce(cluster pidp)
+    reg `var' i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' `partner_vars' `other_vars' if inrange(intyear,2010,2012) & female == 0 [pw=rxwgt], vce(cluster pidp)
     
     * Save coefficients and standard errors 
     gen b_mixed_pre = _b[2.raceb]
@@ -632,7 +680,7 @@ foreach var of varlist in_pension pens_contr {
 
 	
    * Do regression (post)
-    qui reg `var' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk if inrange(intyear,2018,2020) & female == 0 [pw=rxwgt], vce(cluster pidp)
+     reg `var' i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' `partner_vars' `other_vars' if inrange(intyear,2018,2020) & female == 0 [pw=rxwgt], vce(cluster pidp)
     
     * Save coefficients and standard errors 
     gen b_mixed_post = _b[2.raceb]
@@ -709,7 +757,7 @@ foreach var of varlist in_pension pens_contr {
 	keep if annual_dum == 1 //earning above 10k
 	keep if jbpen == 1 // only those offered a pension
     * Do regression (pre)
-   qui reg `var' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk if inrange(intyear,2010,2012) & female == 1 [pw=rxwgt], vce(cluster pidp)
+    reg `var' i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' `partner_vars' `other_vars' if inrange(intyear,2010,2012) & female == 1 [pw=rxwgt], vce(cluster pidp)
     
     * Save coefficients and standard errors 
     gen b_mixed_pre = _b[2.raceb]
@@ -738,7 +786,7 @@ foreach var of varlist in_pension pens_contr {
 
 	
    * Do regression (post)
-    qui reg `var' i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk if inrange(intyear,2018,2020) & female == 1 [pw=rxwgt], vce(cluster pidp)
+     reg `var' i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' `partner_vars' `other_vars' if inrange(intyear,2018,2020) & female == 1 [pw=rxwgt], vce(cluster pidp)
     
     * Save coefficients and standard errors 
     gen b_mixed_post = _b[2.raceb]
@@ -812,26 +860,55 @@ end
 capture program drop self_employed
 program define self_employed
 
+local age_vars "age agesq i.intyear"
+local earn_vars "lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector"
+local job_vars "i.sector i.jbsize i.industry i.occupation i.parttime"
+local indiv_vars "i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.havekid1 i.havekid2 i.havekid3 i.havekid4"
+local partner_vars "i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector"
+local other_vars "housecost_win i.tenure i.bornuk avg_earn5 coefvar"
+
+local drp_rce "2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb"
+
 *regression of pension participation (pooled) on ethnicity - which covariates are important?
 preserve
 *keeping self employed
 keep if sector == 0 
 
-*regression
+*column 1 - raw difference
 reg in_pension i.raceb [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/self_reg.xls, replace label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb) 
-reg in_pension i.raceb age agesq i.intyear [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector [pw=rxwgt], vce(cluster pidp)
-	outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
-reg in_pension i.raceb age agesq i.intyear lnrealearn i.miss_lnrealearn i.annual_dum i.annual_dum#i.sector i.sector i.jbsize i.industry i.occupation i.parttime i.edgrpnew i.edgrpnew#c.age i.region i.female i.health i.kidnum i.married i.partner_edu lnrealpartearn i.miss_lnrealpartearn i.partner_sector housecost_win i.bornuk [pw=rxwgt], vce(cluster pidp)
-outreg2 using $output/self_reg.xls, append label keep(2.raceb 3.raceb 4.raceb 5.raceb 6.raceb 7.raceb 8.raceb 9.raceb)
+outreg2 using $output/self_reg.xls, replace label keep(`drp_rce') 
+
+*column 2 - age variables
+reg in_pension i.raceb `age_vars' [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/self_reg.xls, append label keep(`drp_rce')
+
+*column 3 - earnings variables
+reg in_pension i.raceb `age_vars' `earn_vars' [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/self_reg.xls, append label keep(`drp_rce')
+
+*column 4 - job variables
+reg in_pension i.raceb `age_vars' `earn_vars' `job_vars' [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/self_reg.xls, append label keep(`drp_rce')
+
+*column 5 - individual variables
+reg in_pension i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/self_reg.xls, append label keep(`drp_rce')
+
+*column 6 - partner variables
+reg in_pension i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' `partner_vars' [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/self_reg.xls, append label keep(`drp_rce')
+
+*column 7 - all controls
+reg in_pension i.raceb `age_vars' `earn_vars' `job_vars' `indiv_vars' `partner_vars' `other_vars' [pw=rxwgt], vce(cluster pidp)
+outreg2 using $output/self_reg.xls, append label keep(`drp_rce')
+
+
+*collapsing pension participation by year and race (weighted)
+collapse (mean) in_pension [pw=rxwgt], by(raceb)
+*dropping those with missing race value
+drop if raceb == 10
+*exporting to excel
+export excel "$output/powerpoint_data.xlsx", firstrow(var) sheet("pen_self") sheetreplace
 
 restore
 

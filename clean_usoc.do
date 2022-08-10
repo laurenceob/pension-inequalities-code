@@ -18,6 +18,8 @@ program define main
 	* Just keep USoc observations 
 	keep if wave > 0
 	
+	make_avg_earn
+	
 	* Just keep even waves when we have pension data and declare as panel data with only even waves
 	keep if mod(wave, 2) == 0
 	xtset pidp wave, delta(2)
@@ -100,8 +102,6 @@ program define clean_ff_vars
 	* Make consistent religion variable 
 	replace oprlg1 = 1 if oprlg == 2 // no religion
 	
-	
-	
 	* Make a new religion variable that is aggregated 
 	gen religion = .
 	replace religion = 0 if oprlg1 == 1 // no religion
@@ -162,6 +162,62 @@ program define clean_ff_vars
 	
 end
 
+capture program drop make_avg_earn
+program define make_avg_earn
+
+order pidp, before(pid)
+xtset pidp wave
+sort pidp wave
+
+* Generate a variable for whether the respondent is in work or not
+gen inwork = inlist(jb1status, 1, 2)
+replace jb1earn = 0 if inwork == 0
+
+*seeing how many waves someone is in
+duplicates tag pidp, gen(tag)
+*calculating how many non-missing observations before it
+by pidp: gen nonmiss = sum(!missing(jb1earn)) 
+*generating 5 year total earnings - requires all 5 waves to be non-missing earnings 
+by pidp: gen total = jb1earn + L1.jb1earn + L2.jb1earn + L3.jb1earn + L4.jb1earn
+* replacing total earnings if 4th wave all non-missing
+by pidp: replace total = jb1earn + L1.jb1earn + L2.jb1earn + L3.jb1earn if nonmiss == 4
+*replacing total earnings if 3rd wave all non-missing
+by pidp: replace total = jb1earn + L1.jb1earn + L2.jb1earn if nonmiss == 3
+*generating average earnings (for 3 or 4 nonmissing waves) 
+gen avg_earn5 = total/nonmiss
+*if 5 waves of non missing or more
+replace avg_earn5 = total/5 if nonmiss > 4
+drop total tag nonmiss
+
+*NOTE: 5 year average of past earnings
+* 1. If in only 3 or 4 waves, the average for these (wave 3, 4 only) is calculated
+* 2. If in many waves, the average for waves 3 and onwards is calculated
+* If someone skips waves e.g. is in wave 2 4 6, they will have a missing average earnings with this method, alternative method will give a nonmissing value
+
+/*
+ALTERNATIVE WAY FOR CALCULATION (edit)
+*looking by each person - generating a variable for sum of earnings
+bysort pidp (wave) : gen double sumearn = sum(jb1earn) 
+*by person - generate nonmissing variable which sums number of nonmissing earnings
+by pidp: gen nonmiss = sum(!missing(jb1earn)) 
+*generates 5 year average earnings by person - deals with missing earnings by summing only over non-missing
+by pidp: gen avg_earn5 = (sumearn - sumearn[_n-5]) / (nonmiss - nonmiss[_n-5]) 
+
+duplicates tag pidp, gen(tag)
+by pidp: replace avg_earn5 = sumearn / nonmiss if tag < 4
+drop nonmiss sumearn tag
+*/
+
+********************************************************************************
+*coefficient of variation - the ratio of the standard deviation to the mean and shows the extent of variability in relation to the mean 
+sort pidp wave
+by pidp: egen avg_earntot = mean(jb1earn)
+by pidp: egen std_earn = sd(jb1earn)
+gen coefvar = std_earn / avg_earntot
+drop avg_earntot std_earn
+
+end
+
 capture program drop make_partner_vars
 program define make_partner_vars
 
@@ -169,10 +225,7 @@ program define make_partner_vars
 	
 	* Sort by household, person number and wave 
 	sort hidp wave pno
-	
-	* Generate a variable for whether the respondent is in work or not
-	gen inwork = inlist(jb1status, 1, 2)
-	replace jb1earn = 0 if inwork == 0
+
 
 	* Now get partner's work status. Do this by keeping work status, renaming it to be partner_inwork, and then
 	* merging it back in on the partner
@@ -383,7 +436,7 @@ program define clean_circumstance_vars
 	replace earn_dum = 3 if jb1earn >1000
 	label define earn_dum 1 "0-500" 2 "500-1000" 3 "1000+" 
 
-	*Generating number of kids categorical variable
+	*Generating number of kids categorical variable (max number of kids in sample is 8)
 	gen kidnum =.
 	replace kidnum = 0 if numkids == 0
 	replace kidnum = 1 if inrange(numkids,1,2)
@@ -391,8 +444,29 @@ program define clean_circumstance_vars
 	replace kidnum = 3 if numkids > 4
 	label define kid 0 "0" 1 "1-2" 2 "3-4" 3 "5+"
 	label values kidnum kid
-	save "$workingdata/usoc_clean", replace
 
+	*Generating dummies for age of kids - 1 if have kid in age range, 0 otherwise
+	
+	*If have kid aged 1-5
+	gen havekid1 = 0
+	replace havekid1 = 1 if inrange(kidage1,1,5) | inrange(kidage2,1,5) | inrange(kidage3,1,5) | inrange(kidage4,1,5) | inrange(kidage5,1,5) | inrange(kidage6,1,5) | inrange(kidage7,1,5) | inrange(kidage8,1,5)
+	
+	*If have kid aged 6-10
+	gen havekid2 = 0
+	replace havekid2 = 1 if inrange(kidage1,6,10) | inrange(kidage2,6,10) | inrange(kidage3,6,10) | inrange(kidage4,6,10) | inrange(kidage5,6,10) | inrange(kidage6,6,10) | inrange(kidage7,6,10) | inrange(kidage8,6,10)
+	
+	*If have kid aged 11-15
+	gen havekid3 = 0
+	replace havekid3 = 1 if inrange(kidage1,11,15) | inrange(kidage2,11,15) | inrange(kidage3,11,15) | inrange(kidage4,11,15) | inrange(kidage5,11,15) | inrange(kidage6,11,15) | inrange(kidage7,11,15) | inrange(kidage8,11,15)
+	
+	*If have kid aged 16-18
+	gen havekid4 = 0
+	replace havekid4 = 1 if inrange(kidage1,16,18) | inrange(kidage2,16,18) | inrange(kidage3,16,18) | inrange(kidage4,16,18) | inrange(kidage5,16,18) | inrange(kidage6,16,18) | inrange(kidage7,16,18) | inrange(kidage8,16,18)
+	
+*Together, the kids variables tells us how many kids someone has and the ages of these kids
+	
+	save "$workingdata/usoc_clean", replace	
+	
 	*inflation data - for generating real earnings
 	import excel "$workingdata/inflation.xls", sheet("data") cellrange(A9:B42) clear
 	destring A, replace
