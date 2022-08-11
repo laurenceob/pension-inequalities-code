@@ -187,7 +187,7 @@ by pidp: replace total = jb1earn + L1.jb1earn + L2.jb1earn if nonmiss == 3
 gen avg_earn5 = total/nonmiss
 *if 5 waves of non missing or more
 replace avg_earn5 = total/5 if nonmiss > 4
-drop total tag nonmiss
+drop total tag 
 
 *NOTE: 5 year average of past earnings
 * 1. If in only 3 or 4 waves, the average for these (wave 3, 4 only) is calculated
@@ -210,11 +210,39 @@ drop nonmiss sumearn tag
 
 ********************************************************************************
 *coefficient of variation - the ratio of the standard deviation to the mean and shows the extent of variability in relation to the mean 
+/*
 sort pidp wave
 by pidp: egen avg_earntot = mean(jb1earn)
 by pidp: egen std_earn = sd(jb1earn)
 gen coefvar = std_earn / avg_earntot
+replace coefvar = -1 if coefvar == . //variable equal to -1 if missing
 drop avg_earntot std_earn
+*/
+
+*
+by pidp: egen avg_earn = mean(jb1earn)
+by pidp: gen var_earn = (jb1earn-avg_earn)^2 
+by pidp: gen sumvar = var_earn + var_earn[_n-1] + var_earn[_n-2] + var_earn[_n-3] + var_earn[_n-4]
+by pidp: gen variance = sumvar/5
+by pidp: gen std = (variance)^0.5
+
+by pidp: replace sumvar = var_earn + var_earn[_n-1] + var_earn[_n-2] + var_earn[_n-3] if nonmiss == 4
+by pidp: replace variance = sumvar/4 if nonmiss == 4
+by pidp: replace std = (variance)^0.5 if nonmiss == 4
+
+by pidp: replace sumvar = var_earn + var_earn[_n-1] + var_earn[_n-2] if nonmiss == 3
+by pidp: replace variance = sumvar/3 if nonmiss == 3
+by pidp: replace std = (variance)^0.5 if nonmiss == 3
+
+gen coefvar = std / avg_earn5 
+
+*missing dummies
+replace avg_earn5 = -1 if avg_earn5 == . // variable equal to -1 if missing
+gen missing_avgearn = 0
+replace missing_avgearn = 1 if avg_earn5 == -1
+replace coefvar = -1 if coefvar == . // variable equal to -1 if missing
+gen missing_coefvar = 0
+replace missing_coefvar = 1 if avg_earn5 == -1
 
 end
 
